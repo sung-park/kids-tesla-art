@@ -112,8 +112,8 @@ jobs:
           script: |
             cd ~/kids-tesla-art
             git pull origin main
-            echo "DOCKERHUB_USERNAME=${{ secrets.DOCKERHUB_USERNAME }}" > .env
-            docker compose pull
-            docker compose up -d
+            printf 'DOCKERHUB_USERNAME=%s\n' '${{ secrets.DOCKERHUB_USERNAME }}' > .env
+            docker-compose pull
+            docker-compose up -d
             docker image prune -f
             echo "Deployment complete: $(date)"
