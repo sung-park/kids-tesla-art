@@ -4,11 +4,10 @@ import io
 import re
 from pathlib import Path
 
-import cv2
 import numpy as np
 from PIL import Image
 
-from app.services.panel_map import load_panels, composite_with_panels
+from app.services.warping import warp_image, generate_uv_mask
 
 TEMPLATES_DIR = Path(__file__).parent.parent / "templates"
 OUTPUT_SIZE = 1024
@@ -43,7 +42,6 @@ def composite_and_optimise(
         Tuple of (png_bytes, safe_filename).  png_bytes is guaranteed ≤ 1MB.
     """
     uv_template = _load_template_np(model)
-    panels = load_panels(model)
 
     drawing = np.array(
         Image.fromarray(drawing_rgba, mode="RGBA").resize(
@@ -51,7 +49,21 @@ def composite_and_optimise(
         )
     )
 
-    composited = composite_with_panels(drawing, uv_template, panels)
+    # Warp kid's drawing from template space to UV space
+    warped = warp_image(drawing, model)
+
+    # Generate mask from UV template (white areas = paintable)
+    mask = generate_uv_mask(uv_template)
+
+    # Composite: apply warped drawing only within paintable UV areas
+    composited = uv_template.copy()
+    warped_visible = warped[:, :, 3] > 0  # Where warped drawing has content
+    paint_mask = (mask > 0) & warped_visible  # Paint only where both mask and drawing exist
+    paint_mask_4d = np.stack([paint_mask] * 4, axis=-1)
+
+    # Blend warped drawing onto template within mask
+    composited[paint_mask_4d] = warped[paint_mask_4d]
+
     rgba_img = Image.fromarray(composited)
     white_bg = Image.new("RGBA", rgba_img.size, (255, 255, 255, 255))
     final = Image.alpha_composite(white_bg, rgba_img).convert("RGB")

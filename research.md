@@ -1,115 +1,129 @@
 # Kids Tesla Art — Research Document
 
-## Car-Silhouette Template Redesign (2026-03-06)
+## TPS 기반 Image Warping 재설계 (2026-03-06)
 
-### Problem
-현재 템플릿은 UV 맵 패널을 사각형 블록으로 나열한 평면도.
-아이가 보면 "이게 뭐지?" — 차라는 걸 전혀 알 수 없음.
+### 왜 이전 접근법이 실패하는가
 
-### Goal
-아이가 한눈에 "테슬라다!" 알 수 있는 템플릿:
-- **사이드뷰**: 테슬라 측면 실루엣 안에 색칠
-- **탑뷰**: 위에서 본 지붕/후드/트렁크
-- 색칠한 영역이 UV 맵으로 정확히 매핑되어야 함
+`cv2.getPerspectiveTransform` (4점→4점 매핑)의 근본적 한계:
+- 직사각형→직사각형 변환만 가능 (선형 변환)
+- 사이드뷰 가로 차(984×370) → UV 세로 스트립(264×863)은 **90° 회전 + 비균일 스케일링**
+- 이건 4점 perspective로 표현 불가능 → 아무리 패널을 잘게 잘라도 왜곡 불가피
 
-### UV Template 구조 (실제 확인)
+### 해결: Piecewise Affine Warping (삼각 메시 기반)
 
-Model 3 & Y 둘 다 동일한 레이아웃:
-```
-┌─────────────────────────────────────┐
-│  Left col (x≈0-280)  │ Center (x≈276-748) │ Right col (x≈749-1014) │
-│  왼쪽 측면 패널들      │ 루프/후드/트렁크    │ 오른쪽 측면 패널들      │
-│  (도어, 펜더 등)       │ (위에서 본 모습)    │ (왼쪽의 거울상)        │
-└─────────────────────────────────────┘
-```
-
-### 핵심 기술 제약
-
-1. **`cv2.getPerspectiveTransform()`은 정확히 4점 → 4점 매핑**
-   - kid_quad: 4개 꼭짓점 (원본 - 아이 템플릿 공간)
-   - uv_quad: 4개 꼭짓점 (대상 - UV 공간)
-   - 사각형일 필요 없음 — 임의의 사각형(quadrilateral) 가능
-
-2. **`cv2.fillPoly()` 마스크**: UV 영역 외부로 색이 번지지 않게 제한 → 변경 불필요
-
-3. **ArUco 마커**: 4개 코너 마커로 사진 → 1024x1024 보정 → 변경 불필요
-
-### 제안: 차량 실루엣 기반 레이아웃
+**핵심 아이디어**: 두 공간 (아이 템플릿 ↔ UV 맵) 사이에 **대응 제어점(control points)**을 정의하고,
+Delaunay 삼각분할 → 삼각형별 아핀 변환으로 부드러운 비선형 워핑 수행.
 
 ```
-A4 페이지:
-[ArUco 0]                              [ArUco 1]
-  ┌──────────────────────────────────────┐
-  │                                      │
-  │   ┏━━━━ 테슬라 사이드뷰 실루엣 ━━━━┓  │
-  │   ┃  LEFT SIDE (색칠 영역)         ┃  │  ← 큰 사이드뷰
-  │   ┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛  │
-  │                                      │
-  │   ┌─ 탑뷰 ─────────────────────┐    │
-  │   │ [Hood]  [Roof]  [Trunk]    │    │  ← 위에서 본 모습
-  │   └────────────────────────────┘    │
-  │                                      │
-  │   ┏━━━━ 테슬라 사이드뷰 (반전) ━━━┓  │
-  │   ┃  RIGHT SIDE (색칠 영역)      ┃  │  ← 반전 사이드뷰
-  │   ┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛  │
-  │                                      │
-  │   "Kids Tesla Art — Model 3"        │
-  └──────────────────────────────────────┘
-[ArUco 3]                              [ArUco 2]
+아이 템플릿 (1024×1024)              UV 템플릿 (1024×1024)
+┌──────────────────────┐          ┌──────────────────────┐
+│  Left Side (가로 차)  │   TPS    │  ┌──┐ ┌────┐ ┌──┐  │
+│  ──────────────────  │  =====>  │  │L │ │Roof│ │R │  │
+│  Top (Hood/Roof/Trunk)│  warp   │  │  │ │Hood│ │  │  │
+│  ──────────────────  │          │  │  │ │Trnk│ │  │  │
+│  Right Side (반전 차) │          │  └──┘ └────┘ └──┘  │
+└──────────────────────┘          └──────────────────────┘
 ```
 
-### 구현 방식: 실루엣은 시각적 가이드, 매핑은 quad 기반
+### UV 템플릿 정밀 분석
 
-- **시각적 레이어**: 차 실루엣 윤곽선 (PIL bezier/polygon으로 그림)
-- **매핑 레이어**: kid_quad 4점은 각 뷰의 바운딩 사각형
-- 실루엣 바깥 영역은 rembg 배경 제거 + alpha 마스크로 자연스럽게 무시됨
-- 아이가 실루엣 밖으로 색칠해도 상관없음 (UV fillPoly 마스크가 잘라냄)
+**Model 3 UV (1024×1024)**에서 직접 관찰한 패널 영역:
 
-### 실루엣 생성 방법
+```
+중앙 영역:
+  Roof:    (276, 25)  ~ (748, 166)   — 가로 472, 세로 141
+  Hood:    (368, 175) ~ (655, 399)   — 가로 287, 세로 224
+  Trunk:   (366, 684) ~ (655, 897)   — 가로 289, 세로 213
 
-**Option A: PIL로 좌표 기반 드로잉 (선택)**
-- Tesla Model 3/Y 프로파일을 좌표 점 리스트로 정의
-- `ImageDraw.polygon()` + `ImageDraw.arc()` 조합
-- 장점: 의존성 없음, 벡터 품질, 점 조정 쉬움
-- 단점: 수작업으로 좌표 정의 필요
+좌측 칼럼 (x: 14~278):
+  상단 (rear quarter): y ≈ 131~380
+  중상 (rear door):    y ≈ 380~590
+  중하 (front door):   y ≈ 590~800
+  하단 (front fender): y ≈ 800~994
+  → 차 앞쪽이 UV 하단, 뒤쪽이 UV 상단 (90° 회전 관계)
 
-**Option B: SVG → PNG 변환**
-- 실루엣 SVG 파일을 repo에 포함
-- cairosvg 또는 reportlab로 렌더링
-- 추가 의존성 필요
+우측 칼럼 (x: 749~1014): 좌측 미러
+```
 
-### 변경 필요 파일
+**핵심 관찰**: 사이드뷰→UV는 단순 스케일이 아니라 **90° 회전** 관계.
+- 아이 템플릿의 가로축(차 앞→뒤) = UV의 세로축(아래→위)
+- 아이 템플릿의 세로축(루프→휠아치) = UV의 가로축(좌→우)
 
-| File | Change |
-|------|--------|
-| `backend/app/templates/model3_panels.json` | kid_quad를 새 레이아웃에 맞게 수정 |
-| `backend/app/templates/modely_panels.json` | 동일 |
-| `scripts/generate_templates.py` | 실루엣 드로잉 + 새 레이아웃 |
-| `backend/app/services/panel_map.py` | 변경 없음 (이미 임의 quad 지원) |
-| `backend/app/services/compositing.py` | 변경 없음 |
-| `backend/app/services/detection.py` | 변경 없음 |
-| `frontend/*` | 변경 없음 (PDF만 바뀌므로) |
+이것은 4점 perspective로는 불가능하지만 **TPS/piecewise affine warping**으로 자연스럽게 처리 가능.
 
-### 백엔드 영향: 없음
-`getPerspectiveTransform`과 `fillPoly`는 kid_quad 좌표만 바뀌면 됨.
-kid_quad가 사각형이든 평행사변형이든 상관없이 동작.
+### 제어점 설계 (Left Side 예시)
+
+아이 템플릿 좌측뷰 (20,20)~(1004,390)에서 5×3 격자:
+```
+Kid (x, y)        →    UV (x, y)
+(20,  20)         →    (14,  994)    # 앞-상단 → UV 하단-좌
+(266, 20)         →    (14,  800)
+(512, 20)         →    (14,  590)
+(758, 20)         →    (14,  380)
+(1004, 20)        →    (14,  131)    # 뒤-상단 → UV 상단-좌
+
+(20,  205)        →    (146, 994)    # 앞-중간 → UV 하단-중
+(266, 205)        →    (146, 800)
+(512, 205)        →    (146, 590)
+(758, 205)        →    (146, 380)
+(1004, 205)       →    (146, 131)
+
+(20,  390)        →    (278, 994)    # 앞-하단 → UV 하단-우
+(266, 390)        →    (278, 800)
+(512, 390)        →    (278, 590)
+(758, 390)        →    (278, 380)
+(1004, 390)       →    (278, 131)    # 뒤-하단 → UV 상단-우
+```
+
+이 15개 점으로 Delaunay 삼각분할 → 각 삼각형별 아핀 변환 → 부드러운 워핑.
+
+### 마스크 합성 전략
+
+UV 템플릿에서 흰색(패널 내부) vs 검정 아웃라인 vs 투명(배경) 구분:
+1. UV 템플릿을 그레이스케일 변환 → threshold → 흰색 영역 = 색칠 가능 마스크
+2. 워핑된 아이 그림 × 마스크 = UV 패널 내부에만 색칠 적용
+3. 아웃라인은 보존, 색칠은 내부만 → 깨끗한 출력
+
+### 구현 기술 선택
+
+| 방법 | 장점 | 단점 |
+|------|------|------|
+| TPS (Thin Plate Spline) | 수학적으로 깨끗, 글로벌 smooth | 경계 overshoot 가능 |
+| **Piecewise Affine (삼각 메시)** | 예측 가능, 경계 안정적, 디버그 쉬움 | 삼각분할 필요 |
+| cv2.remap() 기반 | 적용 매우 빠름 (lookup table) | 맵 생성은 별도 필요 |
+
+**선택: Piecewise Affine + cv2.remap()**
+- 삼각 메시로 워프맵 사전 생성 → JSON에 저장 or 시작 시 1회 계산
+- 실제 워핑은 cv2.remap()으로 <10ms
+- 추가 의존성 없음 (OpenCV + NumPy)
+- 마스크는 UV 템플릿에서 자동 생성
+
+### 변경 범위
+
+| 파일 | 변경 |
+|------|------|
+| `backend/app/services/warping.py` | **신규** — piecewise affine 워핑 엔진 |
+| `backend/app/services/panel_map.py` | 삭제 또는 warping.py로 대체 |
+| `backend/app/services/compositing.py` | warping.py 호출 + UV 마스크 합성 |
+| `backend/app/templates/model3_warp.json` | **신규** — 제어점 좌표 |
+| `backend/app/templates/modely_warp.json` | **신규** — 제어점 좌표 |
+| `backend/tests/test_warping.py` | **신규** |
+| `backend/tests/test_compositing.py` | 업데이트 |
+
+**변경 없음**: detection.py, removal.py, 프론트엔드, 템플릿 PDF
 
 ---
 
-(이전 리서치 내용은 아래 보관)
-
 ## Previous Research (archived)
 
+### Fix 1-3 (2026-03-06): 이미 적용됨
+- rembg → threshold 기반 배경 제거 (removal.py) ✅
+- RGBA→RGB 흰색 배경 합성 (compositing.py) ✅
+- 패널 세분화 시도 → 근본적으로 부족하여 TPS 접근으로 전환
+
 ### Tesla Custom Wrap Specs
-- PNG, 1024x1024, ≤1MB
-- USB folder: "Wraps" (exFAT/FAT32)
+- PNG, 1024x1024, ≤1MB, USB "Wraps" 폴더
 - Apply via Toybox → Paint Shop → Wraps
 
-### Processing Pipeline
-```
-Photo → ArUco warp → rembg BG removal → per-panel composite → PNG
-```
-
 ### Infrastructure
-- OCI ARM64 (VM.Standard.A1.Flex), Docker, Nginx reverse proxy
-- GitHub Actions (ARM64 native runner) → DockerHub → SSH deploy
+- OCI ARM64, Docker, Nginx, GitHub Actions CI/CD

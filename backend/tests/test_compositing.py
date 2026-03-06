@@ -4,7 +4,7 @@ import io
 import pytest
 import numpy as np
 from pathlib import Path
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 from PIL import Image
 
 from app.services.compositing import (
@@ -24,6 +24,14 @@ def make_rgba_array(size: int = 64, color=(255, 0, 0, 255)) -> np.ndarray:
 
 def make_template_image(size: int = OUTPUT_SIZE) -> Image.Image:
     return Image.new("RGBA", (size, size), color=(200, 200, 200, 255))
+
+
+def _mock_warp_image(src_image, model):
+    return src_image.copy()
+
+
+def _mock_generate_uv_mask(uv_template):
+    return np.full(uv_template.shape[:2], 255, dtype=np.uint8)
 
 
 class TestSanitiseFilename:
@@ -64,6 +72,12 @@ class TestCompressToLimit:
 
 
 class TestCompositeAndOptimise:
+    def _patch_warping(self):
+        return [
+            patch("app.services.compositing.warp_image", side_effect=_mock_warp_image),
+            patch("app.services.compositing.generate_uv_mask", side_effect=_mock_generate_uv_mask),
+        ]
+
     def test_returns_valid_png_bytes_and_safe_filename(self, tmp_path):
         template_path = tmp_path / "templates"
         template_path.mkdir()
@@ -72,12 +86,15 @@ class TestCompositeAndOptimise:
 
         drawing = make_rgba_array(OUTPUT_SIZE)
 
-        with patch(
-            "app.services.compositing.TEMPLATES_DIR", template_path
-        ):
-            png_bytes, filename = composite_and_optimise(
-                drawing, "model3", "my_drawing.jpg"
-            )
+        with patch("app.services.compositing.TEMPLATES_DIR", template_path):
+            for p in self._patch_warping():
+                p.start()
+            try:
+                png_bytes, filename = composite_and_optimise(
+                    drawing, "model3", "my_drawing.jpg"
+                )
+            finally:
+                patch.stopall()
 
         assert isinstance(png_bytes, bytes)
         assert len(png_bytes) > 0
@@ -91,18 +108,21 @@ class TestCompositeAndOptimise:
     def test_no_black_background_in_output(self, tmp_path):
         template_path = tmp_path / "templates"
         template_path.mkdir()
-        # Template with transparent areas (simulating UV template)
         template = Image.new("RGBA", (OUTPUT_SIZE, OUTPUT_SIZE), (0, 0, 0, 0))
         template.save(template_path / "model3.png")
 
         drawing = make_rgba_array(OUTPUT_SIZE, color=(0, 0, 0, 0))
 
         with patch("app.services.compositing.TEMPLATES_DIR", template_path):
-            png_bytes, _ = composite_and_optimise(drawing, "model3", "test.jpg")
+            for p in self._patch_warping():
+                p.start()
+            try:
+                png_bytes, _ = composite_and_optimise(drawing, "model3", "test.jpg")
+            finally:
+                patch.stopall()
 
         img = Image.open(io.BytesIO(png_bytes))
         pixels = np.array(img)
-        # Transparent areas should be white (255,255,255), not black (0,0,0)
         assert pixels.mean() > 200
 
     def test_raises_for_unknown_model(self):
@@ -117,8 +137,13 @@ class TestCompositeAndOptimise:
 
         drawing = make_rgba_array(OUTPUT_SIZE)
         with patch("app.services.compositing.TEMPLATES_DIR", template_path):
-            _, filename = composite_and_optimise(
-                drawing, "modely", "photo (1)!.jpg"
-            )
+            for p in self._patch_warping():
+                p.start()
+            try:
+                _, filename = composite_and_optimise(
+                    drawing, "modely", "photo (1)!.jpg"
+                )
+            finally:
+                patch.stopall()
         assert "!" not in filename
         assert filename.endswith(".png")
