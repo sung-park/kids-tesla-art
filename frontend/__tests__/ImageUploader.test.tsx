@@ -1,17 +1,18 @@
 import { describe, it, expect, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import ImageUploader from "@/components/ImageUploader";
+import { renderEn } from "./test-utils";
 
 describe("ImageUploader", () => {
   it("renders upload area", () => {
-    render(<ImageUploader onFileSelected={vi.fn()} />);
+    renderEn(<ImageUploader onFileSelected={vi.fn()} />);
     expect(screen.getByRole("button", { name: /drop image here/i })).toBeInTheDocument();
   });
 
   it("shows error for oversized file", async () => {
     const onFileSelected = vi.fn();
-    render(<ImageUploader onFileSelected={onFileSelected} />);
+    renderEn(<ImageUploader onFileSelected={onFileSelected} />);
 
     const oversizedFile = new File(["x".repeat(21 * 1024 * 1024)], "big.jpg", {
       type: "image/jpeg",
@@ -29,7 +30,7 @@ describe("ImageUploader", () => {
 
   it("shows error for unsupported file type", async () => {
     const onFileSelected = vi.fn();
-    render(<ImageUploader onFileSelected={onFileSelected} />);
+    renderEn(<ImageUploader onFileSelected={onFileSelected} />);
 
     const badFile = new File(["data"], "doc.pdf", { type: "application/pdf" });
     const input = document.querySelector(
@@ -45,7 +46,7 @@ describe("ImageUploader", () => {
 
   it("calls onFileSelected for valid JPEG file", async () => {
     const onFileSelected = vi.fn();
-    render(<ImageUploader onFileSelected={onFileSelected} />);
+    renderEn(<ImageUploader onFileSelected={onFileSelected} />);
 
     const validFile = new File(["image-data"], "photo.jpg", { type: "image/jpeg" });
     const input = document.querySelector(
@@ -59,7 +60,7 @@ describe("ImageUploader", () => {
 
   it("calls onFileSelected for valid PNG file", async () => {
     const onFileSelected = vi.fn();
-    render(<ImageUploader onFileSelected={onFileSelected} />);
+    renderEn(<ImageUploader onFileSelected={onFileSelected} />);
 
     const pngFile = new File(["png-data"], "art.png", { type: "image/png" });
     const input = document.querySelector(
@@ -71,7 +72,7 @@ describe("ImageUploader", () => {
   });
 
   it("disables interaction when disabled prop is true", () => {
-    render(<ImageUploader onFileSelected={vi.fn()} disabled />);
+    renderEn(<ImageUploader onFileSelected={vi.fn()} disabled />);
     const dropZone = screen.getByRole("button", { name: /drop image here/i });
     expect(dropZone).toHaveAttribute("tabIndex", "-1");
   });
