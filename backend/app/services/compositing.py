@@ -54,6 +54,9 @@ def composite_and_optimise(
     # Warp kid's drawing from template space to UV space
     warped = warp_image(drawing, model)
 
+    # Filter out near-white pixels (uncolored paper captured by camera)
+    warped = _suppress_paper_white(warped)
+
     # Generate mask from UV template (white areas = paintable, glass excluded)
     mask = generate_uv_mask(uv_template, model)
 
@@ -77,6 +80,29 @@ def composite_and_optimise(
     safe_name = _sanitise_filename(original_filename)
 
     return png_bytes, safe_name
+
+
+def _suppress_paper_white(warped: np.ndarray, threshold: int = 200) -> np.ndarray:
+    """Make near-white pixels transparent so camera-captured paper doesn't tint the UV.
+
+    When kids photograph a printed template, the white paper often appears grayish
+    due to lighting. These gray pixels would otherwise paint over the UV template's
+    clean white body panels. This filter makes high-brightness, low-saturation
+    pixels transparent, keeping only the actual colored artwork.
+    """
+    result = warped.copy()
+    rgb = result[:, :, :3].astype(np.float32)
+    alpha = result[:, :, 3]
+
+    brightness = rgb.mean(axis=2)
+    max_ch = rgb.max(axis=2)
+    min_ch = rgb.min(axis=2)
+    saturation = max_ch - min_ch
+
+    near_white = (brightness > threshold) & (saturation < 40) & (alpha > 0)
+    result[near_white, 3] = 0
+
+    return result
 
 
 def _apply_glass_tint(composited: np.ndarray, model: str) -> np.ndarray:
