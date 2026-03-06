@@ -27,6 +27,17 @@ def _load_template_np(model: str) -> np.ndarray:
     return np.array(img)
 
 
+def _feather_alpha(warped: np.ndarray) -> np.ndarray:
+    """Soften hard edges by eroding then blurring the alpha channel."""
+    result = warped.copy()
+    alpha = result[:, :, 3]
+    kernel = np.ones((3, 3), np.uint8)
+    alpha = cv2.erode(alpha, kernel, iterations=1)
+    alpha = cv2.GaussianBlur(alpha.astype(np.float32), (5, 5), 1.0)
+    result[:, :, 3] = np.clip(alpha, 0, 255).astype(np.uint8)
+    return result
+
+
 def composite_and_optimise(
     drawing_rgba: np.ndarray,
     model: str,
@@ -57,6 +68,9 @@ def composite_and_optimise(
     # Filter out near-white pixels (uncolored paper captured by camera)
     warped = _suppress_paper_white(warped)
 
+    # Soften hard edges
+    warped = _feather_alpha(warped)
+
     # Generate mask from UV template (white areas = paintable, glass excluded)
     mask = generate_uv_mask(uv_template, model)
 
@@ -82,7 +96,7 @@ def composite_and_optimise(
     return png_bytes, safe_name
 
 
-def _suppress_paper_white(warped: np.ndarray, threshold: int = 200) -> np.ndarray:
+def _suppress_paper_white(warped: np.ndarray, threshold: int = 190) -> np.ndarray:
     """Make near-white pixels transparent so camera-captured paper doesn't tint the UV.
 
     When kids photograph a printed template, the white paper often appears grayish
@@ -99,7 +113,7 @@ def _suppress_paper_white(warped: np.ndarray, threshold: int = 200) -> np.ndarra
     min_ch = rgb.min(axis=2)
     saturation = max_ch - min_ch
 
-    near_white = (brightness > threshold) & (saturation < 40) & (alpha > 0)
+    near_white = (brightness > threshold) & (saturation < 50) & (alpha > 0)
     result[near_white, 3] = 0
 
     return result
