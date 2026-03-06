@@ -1,332 +1,170 @@
-# Kids Tesla Art — Implementation Plan
+# Plan: Car-Silhouette Template Redesign (2026-03-06)
 
-## Overview
+## Goal
+아이가 실제 테슬라 모양을 보고 색칠할 수 있는 템플릿으로 교체.
+- 현재: UV 맵 패널 사각형 블록 나열 (평면도) → 아이 입장에서 의미 없음
+- 목표: 사이드뷰 + 탑뷰 실루엣 → 아이가 "테슬라 차다!" 즉시 인식
 
-A stateless, open-source web application that transforms children's hand-drawn Tesla templates into custom Tesla Toybox wrap files. No database, no user accounts — process in memory and return a downloadable PNG.
+## 변경 범위
+
+**변경 없음**: `panel_map.py`, `compositing.py`, `detection.py`, 프론트엔드 전체
+**변경 필요**: `*_panels.json` (kid_quad 좌표), `generate_templates.py` (실루엣 드로잉)
 
 ---
 
-## Repository Structure
+## 새 레이아웃 설계
+
+A4 PDF (2480×3508px), 내부 드로잉 영역 1024×1024 기준 좌표계:
 
 ```
-kids-tesla-art/
-├── frontend/                    # Next.js app
-│   ├── app/
-│   │   ├── layout.tsx
-│   │   ├── page.tsx             # Landing / upload page
-│   │   └── guide/
-│   │       └── page.tsx         # USB guide page
-│   ├── components/
-│   │   ├── ModelSelector.tsx
-│   │   ├── ImageUploader.tsx    # drag-and-drop + camera capture
-│   │   ├── ProcessingStatus.tsx
-│   │   └── DownloadButton.tsx
-│   ├── public/
-│   │   └── templates/           # Preview images per model
-│   ├── Dockerfile
-│   ├── package.json
-│   └── next.config.ts
-│
-├── backend/                     # FastAPI app
-│   ├── app/
-│   │   ├── main.py
-│   │   ├── routers/
-│   │   │   └── process.py       # POST /api/process
-│   │   ├── services/
-│   │   │   ├── detection.py     # ArUco detection + perspective warp
-│   │   │   ├── removal.py       # Background removal (rembg)
-│   │   │   └── compositing.py   # UV mapping + PNG optimization
-│   │   └── templates/           # Bundled Tesla UV PNGs
-│   │       ├── model3.png
-│   │       └── modely.png
-│   ├── Dockerfile
-│   └── requirements.txt
-│
-├── nginx/
-│   └── nginx.conf               # Reverse proxy config
-│
-├── docker-compose.yml           # Production compose (OCI)
-├── docker-compose.dev.yml       # Local dev compose
-├── .github/
-│   └── workflows/
-│       └── deploy.yml           # CI/CD pipeline
-├── LICENSE
-├── CONTRIBUTING.md
-└── README.md
+┌──────────────────────────────────────┐
+│  [ArUco0]              [ArUco1]       │
+│  ┌────────────────────────────────┐  │
+│  │   테슬라 LEFT SIDE 실루엣       │  │  Row1: y=20~390
+│  │   (차체 색칠 영역)              │  │
+│  └────────────────────────────────┘  │
+│                                       │
+│      ┌──────────────────────┐        │
+│      │  Hood  │ Roof │Trunk │        │  Row2: y=420~700
+│      │ (탑뷰 — 위에서 본 차) │        │
+│      └──────────────────────┘        │
+│                                       │
+│  ┌────────────────────────────────┐  │
+│  │   테슬라 RIGHT SIDE 실루엣(반전)│  │  Row3: y=730~1000
+│  │   (차체 색칠 영역)              │  │
+│  └────────────────────────────────┘  │
+│                                       │
+│  [ArUco3]  Kids Tesla Art  [ArUco2]  │
+└──────────────────────────────────────┘
 ```
 
 ---
 
-## Tech Stack
+## 새 kid_quad 좌표 (1024×1024 기준)
 
-| Layer | Technology |
-|-------|-----------|
-| Frontend | Next.js 15 (App Router), Tailwind CSS v4, TypeScript |
-| Backend | Python 3.11, FastAPI, Uvicorn |
-| Image Processing | opencv-contrib-python, rembg, Pillow, numpy |
-| Reverse Proxy | Nginx (Alpine) |
-| Containerization | Docker (multi-stage builds) |
-| Registry | DockerHub (public) |
-| Hosting | OCI VM.Standard.A1.Flex (ARM64, 4 OCPU, 24GB RAM) |
-| CI/CD | GitHub Actions → DockerHub → SSH deploy to OCI |
-
----
-
-## Backend API
-
-### `POST /api/process`
-
-**Request:** `multipart/form-data`
-- `image`: image file (JPEG / PNG / WEBP / HEIC)
-- `model`: `"model3"` | `"modely"`
-
-**Processing pipeline:**
-1. Decode uploaded image to numpy array
-2. Convert to grayscale for ArUco detection
-3. Detect 4 ArUco markers (DICT_4X4_50, IDs 0–3)
-4. If fewer than 4 detected → return `422` with descriptive error message
-5. Map marker corners to template corners → `getPerspectiveTransform` + `warpPerspective`
-6. Remove background → `rembg` (u2net model, pre-loaded at startup)
-7. Composite RGBA drawing onto Tesla UV template PNG
-8. Resize to 1024×1024
-9. Compress to ≤ 1MB (`Pillow` PNG optimize loop, reducing quality if needed)
-10. Sanitize output filename (strip non-alphanumeric except `_-`, truncate to 30 chars)
-11. Return PNG as `StreamingResponse` with `Content-Disposition: attachment`
-
-**Error responses:**
-- `422`: Markers not detected (< 4 found)
-- `400`: Unsupported file type
-- `500`: Internal processing error
-
-### `GET /api/health`
-Returns `{"status": "ok"}` — used by Docker healthcheck.
-
-### `GET /api/templates`
-Returns list of supported models and their template metadata.
-
----
-
-## Frontend Pages
-
-### `/` — Upload Page
-- Model selector (Model 3 / Model Y) with preview images
-- Upload zone:
-  - **Desktop:** drag-and-drop area + file picker
-  - **Mobile:** "Take Photo" button using `<input type="file" accept="image/*" capture="environment">`
-- Processing spinner with status message
-- On success: download button + link to `/guide`
-
-### `/guide` — USB Guide Page
-- Step-by-step instructions with illustrations:
-  1. Format USB as exFAT/FAT32
-  2. Create `Wraps` folder at root
-  3. Copy PNG file
-  4. Insert USB → Tesla Toybox → Paint Shop → Wraps
-- Printable-friendly layout
-
----
-
-## Docker Configuration
-
-### Backend Dockerfile (multi-stage, ARM64-safe)
-```dockerfile
-FROM python:3.11-slim AS base
-
-WORKDIR /app
-COPY requirements.txt .
-
-RUN apt-get update && apt-get install -y \
-    libgl1 libglib2.0-0 libgomp1 \
-    && rm -rf /var/lib/apt/lists/*
-
-RUN pip install --no-cache-dir -r requirements.txt
-
-# Pre-download rembg U2Net model at build time to avoid runtime delay
-RUN python -c "from rembg import new_session; new_session('u2net')"
-
-COPY app/ ./app/
-
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+```json
+left_side:   [[20, 20],   [1004, 20],  [1004, 390], [20, 390]]
+hood:        [[220, 420], [780, 420],  [780, 520],  [220, 520]]
+roof:        [[220, 520], [780, 520],  [780, 620],  [220, 620]]
+trunk:       [[220, 620], [780, 620],  [780, 710],  [220, 710]]
+right_side:  [[20, 730],  [1004, 730], [1004, 1000],[20, 1000]]
 ```
 
-Key: **no `danielgatis/rembg` base image** — installs via pip to support ARM64.
+*uv_quad는 기존 좌표 그대로 유지 — 실제 UV 맵 위치이므로 변경 불필요*
 
-### Frontend Dockerfile (multi-stage)
-```dockerfile
-FROM node:20-alpine AS builder
-WORKDIR /app
-COPY package*.json .
-RUN npm ci
-COPY . .
-RUN npm run build
+---
 
-FROM node:20-alpine AS runner
-WORKDIR /app
-ENV NODE_ENV=production
-COPY --from=builder /app/.next/standalone ./
-COPY --from=builder /app/.next/static ./.next/static
-COPY --from=builder /app/public ./public
-CMD ["node", "server.js"]
+## 구현: `generate_templates.py`
+
+`generate_template_png()` 를 아래 구조로 전면 교체:
+
+```python
+def generate_template_png(model):
+    img = Image.new("RGB", (PAGE_W_PX, PAGE_H_PX), (255, 255, 255))
+    draw = ImageDraw.Draw(img)
+
+    # 1. ArUco 마커 4 모서리
+    _draw_aruco_markers(img)
+
+    # 2. LEFT SIDE 실루엣 (Row 1)
+    _draw_car_side(draw, region=_page_rect(20, 20, 1004, 390), flip=False,
+                   fill=(255, 235, 235), label="Left Side  →  색칠하세요!")
+
+    # 3. TOP VIEW (Row 2: hood / roof / trunk 3분할)
+    _draw_car_top(draw,
+                  hood_rect=_page_rect(220, 420, 780, 520),
+                  roof_rect=_page_rect(220, 520, 780, 620),
+                  trunk_rect=_page_rect(220, 620, 780, 710))
+
+    # 4. RIGHT SIDE 실루엣 (Row 3, 좌우 반전)
+    _draw_car_side(draw, region=_page_rect(20, 730, 1004, 1000), flip=True,
+                   fill=(235, 235, 255), label="Right Side  →  색칠하세요!")
+
+    # 5. 하단 안내 텍스트
+    _draw_instructions(draw, model)
+
+    return img
 ```
 
-### docker-compose.yml (production)
-```yaml
-services:
-  frontend:
-    image: ${DOCKERHUB_USERNAME}/kids-tesla-art-frontend:latest
-    restart: unless-stopped
-    expose:
-      - "3000"
+### `_draw_car_side()` 핵심 로직
+- 테슬라 Model 3/Y 사이드뷰를 좌표 점 리스트로 정의 (PIL polygon)
+- 차체 외곽선: 두꺼운 검은 선 (width=8)
+- 차 내부: 연한 파스텔 fill (아이 색칠이 잘 보이도록)
+- 창문: 연한 파란 fill + 테두리
+- 바퀴: 회색 원
+- 도어 라인: 얇은 회색 구분선
+- 레이블: 영역 하단에 작게
 
-  backend:
-    image: ${DOCKERHUB_USERNAME}/kids-tesla-art-backend:latest
-    restart: unless-stopped
-    expose:
-      - "8000"
+### `_draw_car_top()` 핵심 로직
+- 위에서 본 차 실루엣 (좁고 긴 타원형 + 테이퍼)
+- Hood/Roof/Trunk 3구역을 서로 다른 파스텔 색으로 구분
+- 각 구역 레이블 중앙 배치
+- 앞유리/뒷유리 표시
 
-  nginx:
-    image: nginx:alpine
-    restart: unless-stopped
-    ports:
-      - "80:80"
-      - "443:443"
-    volumes:
-      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
-      - ./nginx/certs:/etc/nginx/certs:ro
-    depends_on:
-      - frontend
-      - backend
+---
+
+## 실루엣 좌표 (Python 코드 핵심 부분)
+
+### Tesla Model 3 사이드 프로파일 (정규화 0~1, region에 fit)
+
+```python
+# flip=False 기준 (Left Side) — 앞이 왼쪽
+SIDE_PROFILE = [
+    # (x_ratio, y_ratio) — 0,0은 region 좌상단
+    (0.03, 0.95),   # 앞 하단
+    (0.03, 0.65),   # 앞 범퍼 상단
+    (0.07, 0.52),   # 후드 시작
+    (0.28, 0.44),   # 후드 끝 / 앞유리 하단
+    (0.34, 0.14),   # 앞유리 상단
+    (0.40, 0.08),   # 루프 앞
+    (0.68, 0.08),   # 루프 뒤
+    (0.77, 0.22),   # 뒤 유리 상단
+    (0.86, 0.42),   # 트렁크
+    (0.92, 0.50),   # 후방 범퍼 상단
+    (0.97, 0.65),   # 후방 범퍼
+    (0.97, 0.95),   # 뒤 하단
+]
+FRONT_WHEEL = (0.20, 0.88, 0.10)  # cx_r, cy_r, r_r
+REAR_WHEEL  = (0.78, 0.88, 0.10)
+```
+
+### Tesla Model Y 사이드 프로파일 (더 높은 루프라인)
+```python
+SIDE_PROFILE_Y = [
+    (0.03, 0.95),
+    (0.03, 0.60),
+    (0.07, 0.46),
+    (0.26, 0.38),
+    (0.32, 0.10),   # Y는 루프가 더 높고 직선적
+    (0.38, 0.06),
+    (0.70, 0.06),
+    (0.78, 0.10),
+    (0.85, 0.38),
+    (0.90, 0.46),
+    (0.97, 0.60),
+    (0.97, 0.95),
+]
 ```
 
 ---
 
-## Nginx Configuration
+## 변경 파일 목록
 
-```nginx
-server {
-    listen 80;
-    server_name _;
-
-    client_max_body_size 20M;
-
-    location /api/ {
-        proxy_pass http://backend:8000;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_read_timeout 120s;  # rembg processing can take 10–30s
-    }
-
-    location / {
-        proxy_pass http://frontend:3000;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-    }
-}
-```
-
----
-
-## CI/CD Pipeline: GitHub Actions
-
-**File:** `.github/workflows/deploy.yml`
-
-**Trigger:** push to `main`
-
-**Steps:**
-1. Checkout code
-2. Set up QEMU (for multi-arch emulation)
-3. Set up Docker Buildx
-4. Login to DockerHub
-5. Build & push **backend** image: `linux/amd64,linux/arm64`
-6. Build & push **frontend** image: `linux/amd64,linux/arm64`
-7. SSH into OCI server → `docker compose pull && docker compose up -d`
-
-**GitHub Secrets required:**
-| Secret | Description |
-|--------|-------------|
-| `DOCKERHUB_USERNAME` | DockerHub username |
-| `DOCKERHUB_TOKEN` | DockerHub access token |
-| `OCI_HOST` | OCI server public IP |
-| `OCI_SSH_KEY` | Private SSH key for OCI ubuntu user |
-
----
-
-## OCI Server Setup (one-time manual)
-
-1. Provision `VM.Standard.A1.Flex` (4 OCPU, 24GB, Ubuntu 22.04)
-2. Open ports in OCI Security Lists: TCP 22, 80, 443 ingress
-3. Open ports in OS firewall:
-   ```bash
-   sudo iptables -I INPUT -p tcp --dport 80 -j ACCEPT
-   sudo iptables -I INPUT -p tcp --dport 443 -j ACCEPT
-   sudo apt install iptables-persistent -y
-   ```
-4. Install Docker + Docker Compose plugin
-5. Add ubuntu user to docker group
-6. Clone repo → `docker compose up -d`
-7. Add SSH public key from GitHub Actions secret
-
----
-
-## PDF Template Design
-
-The printable PDF templates must include:
-- Simplified, bold-outlined Tesla silhouette (coloring-book style)
-- 4 ArUco markers (DICT_4X4_50, IDs 0–3) at the four corners, sized ≥ 2cm for reliable detection
-- Clear border region with instruction text ("Color inside the lines!")
-- One template per model (Model 3, Model Y)
-- Generated programmatically using `reportlab` or designed in Inkscape, exported as PDF
+| 파일 | 변경 내용 |
+|------|-----------|
+| `backend/app/templates/model3_panels.json` | kid_quad 좌표 새 레이아웃으로 교체 |
+| `backend/app/templates/modely_panels.json` | 동일 |
+| `scripts/generate_templates.py` | 실루엣 드로잉 + 새 레이아웃 |
+| `frontend/public/templates/model3-template.pdf` | 재생성 (스크립트 실행) |
+| `frontend/public/templates/modely-template.pdf` | 재생성 |
 
 ---
 
 ## Todo List
 
-### Phase 1: Project Scaffolding
-- [ ] Initialize Next.js 15 project with TypeScript + Tailwind CSS in `frontend/`
-- [ ] Initialize FastAPI project with `uv` or plain pip in `backend/`
-- [ ] Create `requirements.txt` (fastapi, uvicorn, opencv-contrib-python, rembg, Pillow, numpy, python-multipart)
-- [ ] Create `backend/Dockerfile` (multi-stage, pip-based rembg, ARM64-safe)
-- [ ] Create `frontend/Dockerfile` (multi-stage, Next.js standalone output)
-- [ ] Create `nginx/nginx.conf`
-- [ ] Create `docker-compose.yml` and `docker-compose.dev.yml`
-- [ ] Create `.github/workflows/deploy.yml`
-
-### Phase 2: Backend — Image Processing Pipeline
-- [ ] `backend/app/main.py`: FastAPI app entry, CORS, startup rembg session preload
-- [ ] `backend/app/services/detection.py`: ArUco detection + perspective warp
-- [ ] `backend/app/services/removal.py`: rembg background removal wrapper
-- [ ] `backend/app/services/compositing.py`: UV template compositing + resize + PNG compression
-- [ ] `backend/app/routers/process.py`: `POST /api/process` endpoint
-- [ ] Bundle official Tesla UV templates (`model3.png`, `modely.png`) in `backend/app/templates/`
-- [ ] `GET /api/health` and `GET /api/templates` endpoints
-
-### Phase 3: Frontend — UI
-- [ ] `app/layout.tsx`: root layout, metadata, fonts
-- [ ] `app/page.tsx`: main upload page structure
-- [ ] `components/ModelSelector.tsx`: Model 3 / Model Y toggle with preview
-- [ ] `components/ImageUploader.tsx`: drag-and-drop + mobile camera input
-- [ ] `components/ProcessingStatus.tsx`: spinner + status messages
-- [ ] `components/DownloadButton.tsx`: trigger download of processed PNG
-- [ ] `app/guide/page.tsx`: step-by-step USB guide
-- [ ] Wire up `POST /api/process` call with form data
-
-### Phase 4: PDF Template Generation
-- [ ] Script to generate printable PDF templates with ArUco markers for Model 3 and Model Y
-- [ ] Place generated PDFs in `frontend/public/templates/`
-
-### Phase 5: Polish & Docs
-- [ ] `README.md`: project overview, local dev setup, deployment guide
-- [ ] `CONTRIBUTING.md`
-- [ ] `LICENSE` (MIT)
-- [ ] Verify output PNG meets Tesla specs: 1024×1024, ≤1MB, valid filename
-
----
-
-## Key Constraints to Enforce
-
-- rembg must be installed via `pip`, not from the official Docker image (ARM64 incompatible)
-- rembg session must be pre-loaded at FastAPI startup (not per-request) to avoid 30s cold start
-- `proxy_read_timeout` in Nginx must be ≥ 60s (rembg processing time on CPU)
-- Output PNG filename must be sanitized: only `[A-Za-z0-9_\- ]`, max 30 chars
-- File upload size limit: 20MB (raw phone photos can be large)
-- No user data persisted server-side — process entirely in memory
+- [ ] `model3_panels.json` — kid_quad를 새 레이아웃 좌표로 교체
+- [ ] `modely_panels.json` — 동일
+- [ ] `generate_templates.py` — 실루엣 드로잉 함수 구현 (`_draw_car_side`, `_draw_car_top`)
+- [ ] 로컬에서 PDF 재생성 및 시각 확인 (`/tmp/tesla-venv/bin/python scripts/generate_templates.py`)
+- [ ] 생성된 PDF `frontend/public/templates/` 에 커밋
+- [ ] 커밋 & 푸쉬
