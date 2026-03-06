@@ -34,7 +34,7 @@ describe("processImage", () => {
     expect(result.filename).toBe("my-wrap.png");
     expect(result.blobUrl).toBe("blob:mock-url");
     expect(onStep).toHaveBeenCalledWith("uploading");
-    expect(onStep).toHaveBeenCalledWith("done");
+    expect(onStep).toHaveBeenCalledWith("previewing");
   });
 
   it("uses fallback filename when Content-Disposition is missing", async () => {
