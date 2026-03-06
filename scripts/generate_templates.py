@@ -100,38 +100,38 @@ def _draw_aruco_markers(img):
 
 # Model 3: low roofline, fastback silhouette
 _MODEL3_BODY = [
-    (0.03, 0.96), (0.03, 0.68), (0.06, 0.56), (0.08, 0.50),
-    (0.26, 0.44), (0.34, 0.16), (0.40, 0.09),
-    (0.68, 0.09), (0.76, 0.24), (0.83, 0.43),
-    (0.88, 0.50), (0.92, 0.56), (0.96, 0.68), (0.96, 0.96),
+    (0.01, 0.96), (0.01, 0.68), (0.04, 0.56), (0.07, 0.50),
+    (0.25, 0.44), (0.33, 0.16), (0.39, 0.09),
+    (0.69, 0.09), (0.77, 0.24), (0.84, 0.43),
+    (0.89, 0.50), (0.93, 0.56), (0.99, 0.68), (0.99, 0.96),
 ]
-_MODEL3_WINDSHIELD = [
-    (0.27, 0.44), (0.35, 0.17), (0.41, 0.10),
-    (0.41, 0.16), (0.36, 0.38),
+# Full side glass: A-pillar to C-pillar, roofline to beltline
+_MODEL3_SIDE_GLASS = [
+    (0.25, 0.50), (0.33, 0.17), (0.39, 0.10),
+    (0.69, 0.10), (0.77, 0.25), (0.84, 0.49),
 ]
-_MODEL3_REAR_WINDOW = [
-    (0.68, 0.10), (0.75, 0.25), (0.82, 0.43),
-    (0.76, 0.42), (0.72, 0.28),
-]
+# Pillar positions (normalized x): A-pillar, B-pillar, C-pillar
+_MODEL3_A_PILLAR = ((0.29, 0.48), (0.36, 0.14))
+_MODEL3_B_PILLAR_X = 0.535
+_MODEL3_C_PILLAR = ((0.73, 0.18), (0.80, 0.47))
 _MODEL3_FRONT_WHEEL = (0.20, 0.90, 0.085)
 _MODEL3_REAR_WHEEL = (0.77, 0.90, 0.085)
 _MODEL3_DOOR_X = 0.535
 
 # Model Y: taller, more upright SUV profile
 _MODELY_BODY = [
-    (0.03, 0.96), (0.03, 0.66), (0.06, 0.54), (0.09, 0.48),
-    (0.27, 0.40), (0.33, 0.12), (0.39, 0.06),
-    (0.68, 0.06), (0.76, 0.12), (0.82, 0.40),
-    (0.88, 0.48), (0.92, 0.54), (0.97, 0.66), (0.97, 0.96),
+    (0.01, 0.96), (0.01, 0.66), (0.04, 0.54), (0.07, 0.48),
+    (0.25, 0.40), (0.32, 0.12), (0.38, 0.06),
+    (0.69, 0.06), (0.77, 0.12), (0.84, 0.40),
+    (0.89, 0.48), (0.93, 0.54), (0.99, 0.66), (0.99, 0.96),
 ]
-_MODELY_WINDSHIELD = [
-    (0.28, 0.40), (0.34, 0.13), (0.40, 0.07),
-    (0.40, 0.13), (0.36, 0.34),
+_MODELY_SIDE_GLASS = [
+    (0.25, 0.47), (0.32, 0.13), (0.38, 0.07),
+    (0.69, 0.07), (0.77, 0.13), (0.84, 0.46),
 ]
-_MODELY_REAR_WINDOW = [
-    (0.68, 0.07), (0.75, 0.13), (0.81, 0.40),
-    (0.75, 0.38), (0.71, 0.20),
-]
+_MODELY_A_PILLAR = ((0.29, 0.45), (0.35, 0.11))
+_MODELY_B_PILLAR_X = 0.535
+_MODELY_C_PILLAR = ((0.73, 0.15), (0.81, 0.44))
 _MODELY_FRONT_WHEEL = (0.20, 0.90, 0.085)
 _MODELY_REAR_WHEEL = (0.77, 0.90, 0.085)
 _MODELY_DOOR_X = 0.535
@@ -145,57 +145,78 @@ def _draw_car_side(draw, x0, y0, w, h, model="model3", flip=False,
                    fill=(255, 255, 255)):
     if model == "modely":
         body_pts_n = _MODELY_BODY
-        ws_pts_n = _MODELY_WINDSHIELD
-        rw_pts_n = _MODELY_REAR_WINDOW
+        glass_pts_n = _MODELY_SIDE_GLASS
+        a_pillar_n = _MODELY_A_PILLAR
+        b_pillar_x_n = _MODELY_B_PILLAR_X
+        c_pillar_n = _MODELY_C_PILLAR
         fw = _MODELY_FRONT_WHEEL
         rw = _MODELY_REAR_WHEEL
         door_x_n = _MODELY_DOOR_X
     else:
         body_pts_n = _MODEL3_BODY
-        ws_pts_n = _MODEL3_WINDSHIELD
-        rw_pts_n = _MODEL3_REAR_WINDOW
+        glass_pts_n = _MODEL3_SIDE_GLASS
+        a_pillar_n = _MODEL3_A_PILLAR
+        b_pillar_x_n = _MODEL3_B_PILLAR_X
+        c_pillar_n = _MODEL3_C_PILLAR
         fw = _MODEL3_FRONT_WHEEL
         rw = _MODEL3_REAR_WHEEL
         door_x_n = _MODEL3_DOOR_X
 
     if flip:
         body_pts_n = [(1.0 - p[0], p[1]) for p in body_pts_n]
-        ws_pts_n = [(1.0 - p[0], p[1]) for p in ws_pts_n]
-        rw_pts_n = [(1.0 - p[0], p[1]) for p in rw_pts_n]
+        glass_pts_n = [(1.0 - p[0], p[1]) for p in glass_pts_n]
+        a_pillar_n = ((1.0 - a_pillar_n[0][0], a_pillar_n[0][1]),
+                      (1.0 - a_pillar_n[1][0], a_pillar_n[1][1]))
+        b_pillar_x_n = 1.0 - b_pillar_x_n
+        c_pillar_n = ((1.0 - c_pillar_n[0][0], c_pillar_n[0][1]),
+                      (1.0 - c_pillar_n[1][0], c_pillar_n[1][1]))
         fw = (1.0 - fw[0], fw[1], fw[2])
         rw = (1.0 - rw[0], rw[1], rw[2])
         door_x_n = 1.0 - door_x_n
 
     body_pts = _scale_pts(body_pts_n, x0, y0, w, h)
-    ws_pts = _scale_pts(ws_pts_n, x0, y0, w, h)
-    rw_pts = _scale_pts(rw_pts_n, x0, y0, w, h)
+    glass_pts = _scale_pts(glass_pts_n, x0, y0, w, h)
 
     # Car body fill
     draw.polygon(body_pts, fill=fill)
 
-    # Windows
-    draw.polygon(ws_pts, fill=(210, 230, 248), outline=(100, 120, 140), width=4)
-    draw.polygon(rw_pts, fill=(210, 230, 248), outline=(100, 120, 140), width=4)
+    # Full side glass (large area covering A-pillar to C-pillar)
+    draw.polygon(glass_pts, fill=(200, 220, 245), outline=(100, 120, 140), width=4)
 
-    # Headlights / taillights — draw before body outline so edge overflow is hidden
-    hl_x = x0 + (0.09 if not flip else 0.91) * w
+    # Pillar lines (A, B, C) as visual separators within glass
+    a_p = _scale_pts(list(a_pillar_n), x0, y0, w, h)
+    draw.line(a_p, fill=(80, 100, 120), width=6)
+    c_p = _scale_pts(list(c_pillar_n), x0, y0, w, h)
+    draw.line(c_p, fill=(80, 100, 120), width=6)
+
+    # B-pillar (vertical divider at door line within glass)
+    glass_ys = [p[1] for p in glass_pts_n]
+    glass_top_y = min(glass_ys)
+    glass_bot_y = max(glass_ys)
+    bp_top = (x0 + b_pillar_x_n * w, y0 + (glass_top_y + 0.02) * h)
+    bp_bot = (x0 + b_pillar_x_n * w, y0 + glass_bot_y * h)
+    draw.line([bp_top, bp_bot], fill=(80, 100, 120), width=8)
+
+    # Headlights / taillights
+    hl_x = x0 + (0.07 if not flip else 0.93) * w
     hl_y = y0 + 0.62 * h
     draw.ellipse([hl_x - 15, hl_y - 9, hl_x + 15, hl_y + 9],
                  fill=(255, 240, 180), outline=(160, 140, 80), width=3)
-    tl_x = x0 + (0.91 if not flip else 0.09) * w
+    tl_x = x0 + (0.93 if not flip else 0.07) * w
     tl_y = y0 + 0.64 * h
     draw.ellipse([tl_x - 15, tl_y - 9, tl_x + 15, tl_y + 9],
                  fill=(255, 160, 160), outline=(180, 80, 80), width=3)
 
-    # Door line
+    # Door line (below glass only — beltline to sill)
     door_x = x0 + door_x_n * w
-    door_top_y = y0 + 0.12 * h
+    door_top_y = y0 + glass_bot_y * h
     door_bot_y = y0 + 0.70 * h
     draw.line([(door_x, door_top_y), (door_x, door_bot_y)],
               fill=(160, 160, 160), width=5)
 
-    # Door handles — small rectangles well away from door line
-    handle_positions = [(0.34, 0.43), (0.67, 0.43)]
+    # Door handles
+    handle_y = glass_bot_y + 0.04
+    handle_positions = [(0.38, handle_y), (0.67, handle_y)]
     if flip:
         handle_positions = [(1.0 - hx, hy) for hx, hy in handle_positions]
     for hx_n, hy_n in handle_positions:

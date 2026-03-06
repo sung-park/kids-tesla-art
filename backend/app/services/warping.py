@@ -226,11 +226,23 @@ def warp_image(
     return np.clip(warped, 0, 255).astype(np.uint8)
 
 
-def generate_uv_mask(uv_template: np.ndarray) -> np.ndarray:
+def _load_glass_regions(model: str) -> list[np.ndarray]:
+    path = TEMPLATES_DIR / f"{model}_panels.json"
+    if not path.exists():
+        return []
+    config = json.loads(path.read_text())
+    regions = []
+    for region in config.get("glass_regions", []):
+        pts = np.array(region["polygon"], dtype=np.int32)
+        regions.append(pts)
+    return regions
+
+
+def generate_uv_mask(uv_template: np.ndarray, model: str = "") -> np.ndarray:
     """Generate a paintable-area mask from the UV template.
 
     White/bright areas in the template are paintable surfaces.
-    Outlines and transparent areas are protected.
+    Glass regions (from panels config) are excluded from painting.
 
     Returns:
         Single-channel uint8 mask (0=protected, 255=paintable).
@@ -238,7 +250,6 @@ def generate_uv_mask(uv_template: np.ndarray) -> np.ndarray:
     if uv_template.shape[2] == 4:
         alpha = uv_template[:, :, 3]
         gray = cv2.cvtColor(uv_template[:, :, :3], cv2.COLOR_RGB2GRAY)
-        # Paintable = high brightness AND visible (alpha > 0)
         mask = ((gray > 200) & (alpha > 128)).astype(np.uint8) * 255
     else:
         gray = cv2.cvtColor(uv_template, cv2.COLOR_RGB2GRAY)
@@ -247,5 +258,10 @@ def generate_uv_mask(uv_template: np.ndarray) -> np.ndarray:
     # Erode slightly to avoid painting over outlines
     kernel = np.ones((3, 3), np.uint8)
     mask = cv2.erode(mask, kernel, iterations=1)
+
+    # Exclude glass/window regions from paintable mask
+    if model:
+        for pts in _load_glass_regions(model):
+            cv2.fillPoly(mask, [pts], 0)
 
     return mask

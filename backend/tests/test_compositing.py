@@ -30,7 +30,7 @@ def _mock_warp_image(src_image, model):
     return src_image.copy()
 
 
-def _mock_generate_uv_mask(uv_template):
+def _mock_generate_uv_mask(uv_template, model=""):
     return np.full(uv_template.shape[:2], 255, dtype=np.uint8)
 
 

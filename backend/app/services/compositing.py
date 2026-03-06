@@ -1,9 +1,11 @@
 """Composite drawing onto Tesla UV template and optimise to ≤1MB PNG."""
 
 import io
+import json
 import re
 from pathlib import Path
 
+import cv2
 import numpy as np
 from PIL import Image
 
@@ -52,17 +54,20 @@ def composite_and_optimise(
     # Warp kid's drawing from template space to UV space
     warped = warp_image(drawing, model)
 
-    # Generate mask from UV template (white areas = paintable)
-    mask = generate_uv_mask(uv_template)
+    # Generate mask from UV template (white areas = paintable, glass excluded)
+    mask = generate_uv_mask(uv_template, model)
 
     # Composite: apply warped drawing only within paintable UV areas
     composited = uv_template.copy()
-    warped_visible = warped[:, :, 3] > 0  # Where warped drawing has content
-    paint_mask = (mask > 0) & warped_visible  # Paint only where both mask and drawing exist
+    warped_visible = warped[:, :, 3] > 0
+    paint_mask = (mask > 0) & warped_visible
     paint_mask_4d = np.stack([paint_mask] * 4, axis=-1)
 
     # Blend warped drawing onto template within mask
     composited[paint_mask_4d] = warped[paint_mask_4d]
+
+    # Apply glass tint to window regions
+    composited = _apply_glass_tint(composited, model)
 
     rgba_img = Image.fromarray(composited)
     white_bg = Image.new("RGBA", rgba_img.size, (255, 255, 255, 255))
@@ -72,6 +77,35 @@ def composite_and_optimise(
     safe_name = _sanitise_filename(original_filename)
 
     return png_bytes, safe_name
+
+
+def _apply_glass_tint(composited: np.ndarray, model: str) -> np.ndarray:
+    """Apply a subtle blue-gray tint to glass/window regions for realism."""
+    config_path = TEMPLATES_DIR / f"{model}_panels.json"
+    if not config_path.exists():
+        return composited
+    config = json.loads(config_path.read_text())
+    glass_regions = config.get("glass_regions", [])
+    if not glass_regions:
+        return composited
+
+    result = composited.copy()
+    glass_mask = np.zeros(result.shape[:2], dtype=np.uint8)
+    for region in glass_regions:
+        pts = np.array(region["polygon"], dtype=np.int32)
+        cv2.fillPoly(glass_mask, [pts], 255)
+
+    tint_indices = glass_mask > 0
+    tint_color = np.array([180, 205, 225], dtype=np.float32)
+    alpha = 0.25
+    for c in range(3):
+        result[:, :, c] = np.where(
+            tint_indices,
+            (result[:, :, c].astype(np.float32) * (1 - alpha)
+             + tint_color[c] * alpha).astype(np.uint8),
+            result[:, :, c],
+        )
+    return result
 
 
 def _compress_to_limit(image: Image.Image) -> bytes:

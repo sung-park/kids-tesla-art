@@ -1,122 +1,203 @@
-# Plan: Piecewise Affine Warping 재설계 (2026-03-06)
+# Plan: 유리 영역 분리 + 바디 전용 맵핑 (2026-03-06)
 
-## 목표
-아이가 차 실루엣 템플릿에 색칠 → 사진 업로드 → UV 맵에 **자연스럽게** 매핑.
-4점 perspective 대신 **삼각 메시 기반 piecewise affine warping** 사용.
+## 문제
+1. 아이 템플릿의 유리(창문)가 너무 작음 → 실제 차 비율로 크게 키워야 함 (프레임만 남기고)
+2. UV 맵핑 시 유리 영역까지 아이 그림이 칠해짐 → 바디만 맵핑되어야 함
+3. UV 출력에서 유리 영역이 비어 보임 → 유리 틴트 효과 필요
 
-## 핵심 변경
+## 접근 방식
 
-### 1. `warping.py` (신규) — Piecewise Affine 워핑 엔진
+### A. 아이 템플릿 유리 크기 확대 (generate_templates.py)
+현재 유리(앞유리, 뒷유리)가 차 실루엣 대비 너무 작음.
+실제 Tesla Model 3 비율에 맞게 유리를 대폭 확대:
+- 사이드뷰: 윈드실드와 후면유리가 A/B/C 필러 사이를 거의 전부 채우도록
+- 유리 하단 라인을 도어 핸들 바로 위 높이까지 내림
+- 프레임(필러)만 남기고 나머지는 유리 영역으로
 
-제어점 기반 삼각 메시 워핑:
+### B. UV 공간에 유리 제외 마스크 추가
+- `model3_panels.json`에 `glass_regions` 폴리곤 좌표 추가
+- `generate_uv_mask()`에서 glass_regions를 paintable mask에서 제외
+- UV 유리 영역에 반투명 틴트 칼라 적용 (현실감)
 
-```python
-def build_warp_map(src_pts, dst_pts, output_size=1024):
-    """제어점 쌍으로부터 cv2.remap()용 맵 생성.
+### C. 워프 제어점 정밀화 (바디 중심 + 휠아치 정렬)
+현재: 5×3 균일 격자 → 휠아치 곡선 추적 불가
+변경:
+- 상단 행을 유리 아래(바디 시작)로 이동
+- 휠아치 근처에 제어점 추가 (5×3 → 7×3 이상)
+- dst 제어점을 실제 UV 휠아치 위치에 맞춤
 
-    1. dst_pts에 대해 Delaunay 삼각분할
-    2. 각 출력 픽셀이 어느 삼각형에 속하는지 판별
-    3. 해당 삼각형의 아핀 역변환으로 소스 좌표 계산
-    4. mapx, mapy 배열 반환
-    """
-    ...
-
-def apply_warp(src_image, mapx, mapy):
-    """사전 계산된 워프맵으로 이미지 변형."""
-    return cv2.remap(src_image, mapx, mapy, cv2.INTER_LINEAR,
-                     borderMode=cv2.BORDER_CONSTANT, borderValue=(0,0,0,0))
-```
-
-**성능**: 워프맵 생성 1회 (서버 시작 시), 이후 `cv2.remap()`은 <10ms.
-
-### 2. 제어점 JSON (model3_warp.json, modely_warp.json)
-
-각 영역별 src(아이 템플릿) → dst(UV 맵) 대응점:
-
-```json
-{
-  "regions": [
-    {
-      "name": "left_side",
-      "src_points": [
-        [20, 20], [266, 20], [512, 20], [758, 20], [1004, 20],
-        [20, 205], [266, 205], [512, 205], [758, 205], [1004, 205],
-        [20, 390], [266, 390], [512, 390], [758, 390], [1004, 390]
-      ],
-      "dst_points": [
-        [14, 994], [14, 800], [14, 590], [14, 380], [14, 131],
-        [146, 994], [146, 800], [146, 590], [146, 380], [146, 131],
-        [278, 994], [278, 800], [278, 590], [278, 380], [278, 131]
-      ]
-    },
-    {
-      "name": "right_side",
-      "src_points": "... (좌측 미러 + UV 우측 칼럼 좌표)"
-    },
-    {
-      "name": "hood",
-      "src_points": [[220,420],[500,420],[780,420],[220,520],[500,520],[780,520]],
-      "dst_points": [[368,175],[512,175],[655,175],[368,399],[512,399],[655,399]]
-    },
-    { "name": "roof", "...": "..." },
-    { "name": "trunk", "...": "..." }
-  ]
-}
-```
-
-### 3. UV 마스크 합성 (compositing.py 업데이트)
-
-```python
-def generate_uv_mask(uv_template):
-    """UV 템플릿에서 색칠 가능 영역 마스크 생성.
-    흰색(밝은) 영역 = 색칠 가능, 아웃라인/투명 = 보호."""
-    gray = cv2.cvtColor(uv_template[:,:,:3], cv2.COLOR_RGB2GRAY)
-    _, mask = cv2.threshold(gray, 240, 255, cv2.THRESH_BINARY)
-    return mask
-
-def composite(warped_drawing, uv_template, mask):
-    """마스크를 통해 워핑된 아이 그림을 UV 템플릿에 합성."""
-    # mask가 흰색인 곳에만 아이 그림 표시
-    # 나머지는 UV 템플릿(아웃라인 등) 유지
-```
-
-### 4. panel_map.py 대체
-
-기존 `panel_map.py`의 `composite_with_panels()` → `warping.py`의 `apply_warp()` + 새 합성 로직으로 교체.
+### D. 아이 템플릿 사이드뷰 좌우 확장
+현재 차 실루엣이 패널 영역을 완전히 채우지 않음 → 범퍼/펜더 끝까지 확장하여
+UV 템플릿 가장자리(노즈, 리어 범퍼)와 정렬
 
 ---
 
-## 파이프라인 비교
+## 상세 구현
 
+### 1. generate_templates.py — 유리 크기 확대
+
+현재 유리 포인트:
+```python
+# 윈드실드 (너무 작음)
+_MODEL3_WINDSHIELD = [
+    (0.27, 0.44), (0.35, 0.17), (0.41, 0.10),
+    (0.41, 0.16), (0.36, 0.38),
+]
+# 후면유리 (너무 작음)
+_MODEL3_REAR_WINDOW = [
+    (0.68, 0.10), (0.75, 0.25), (0.82, 0.43),
+    (0.76, 0.42), (0.72, 0.28),
+]
 ```
-Before: Photo → ArUco → threshold BG → per-panel perspective(4점) → UV composite
-After:  Photo → ArUco → threshold BG → piecewise affine warp(N점) → UV mask composite
+
+변경 방향:
+- 유리 하단을 y≈0.50 정도까지 내림 (현재 ~0.43)
+- 유리 상단은 루프라인에 더 가깝게
+- 사이드 윈도우(도어 유리) 추가: 윈드실드~후면유리 사이 전체를 유리로 채움
+- B필러(door_x=0.535) 양쪽의 도어 유리 표현
+
+새 유리 영역 (Model 3):
+```python
+# 전체 사이드 윈도우 (도어 유리 포함)
+_MODEL3_SIDE_WINDOWS = [
+    # 윈드실드
+    (0.27, 0.48), (0.35, 0.18), (0.41, 0.10),
+    # 루프라인 따라
+    (0.68, 0.10),
+    # 후면유리
+    (0.76, 0.26), (0.83, 0.48),
+]
+# 필러 라인으로 구분 (시각적 가이드)
+# A필러: (0.33, 0.20) ~ (0.27, 0.48)
+# B필러: (0.535 ± offset) 세로선
+# C필러: (0.72, 0.20) ~ (0.83, 0.48)
 ```
+
+### 2. model3_panels.json — glass_regions 추가
+
+UV 공간에서 유리 영역 폴리곤:
+```json
+{
+  "glass_regions": [
+    {
+      "name": "left_side_glass",
+      "polygon": [
+        [210, 131], [278, 131], [278, 994],
+        [210, 994]
+      ]
+    },
+    {
+      "name": "right_side_glass",
+      "polygon": [
+        [749, 131], [817, 131], [817, 994],
+        [749, 994]
+      ]
+    }
+  ]
+}
+```
+Note: 정확한 폴리곤은 UV 템플릿 아웃라인 분석 후 조정 필요.
+좌측 스트립 x≈210~278 영역이 유리/상단 부분.
+
+### 3. warping.py — generate_uv_mask() 수정
+
+```python
+def generate_uv_mask(uv_template, model):
+    # 기존: 밝은 영역 = paintable
+    gray = cv2.cvtColor(uv_template[:,:,:3], cv2.COLOR_RGB2GRAY)
+    mask = ((gray > 200) & (alpha > 128)).astype(np.uint8) * 255
+
+    # 추가: glass_regions 제외
+    panels_config = load_panels_config(model)
+    for region in panels_config.get("glass_regions", []):
+        pts = np.array(region["polygon"], dtype=np.int32)
+        cv2.fillPoly(mask, [pts], 0)  # 유리 영역 = 비페인팅
+
+    return mask
+```
+
+### 4. compositing.py — 유리 틴트 적용
+
+```python
+def _apply_glass_tint(composited, model):
+    """UV 유리 영역에 반투명 틴트 적용."""
+    config = load_panels_config(model)
+    tint_color = np.array([180, 200, 220, 180])  # 연한 블루 반투명
+    for region in config.get("glass_regions", []):
+        pts = np.array(region["polygon"], dtype=np.int32)
+        glass_mask = np.zeros(composited.shape[:2], dtype=np.uint8)
+        cv2.fillPoly(glass_mask, [pts], 255)
+        # 블렌딩
+        alpha = 0.3
+        for c in range(3):
+            composited[:,:,c] = np.where(
+                glass_mask > 0,
+                composited[:,:,c] * (1 - alpha) + tint_color[c] * alpha,
+                composited[:,:,c]
+            )
+```
+
+### 5. model3_warp.json — 제어점 정밀화 + 휠아치 정렬
+
+UV 템플릿 실측 데이터:
+```
+왼쪽 스트립 (x=0-278):
+  앞 휠아치: UV y ≈ 786-846 (폭 196→31→79, 깊이 있는 인덴트)
+  뒤 휠아치: UV y ≈ 336-381 (폭 141→0→96, 패널 경계에서 끊김)
+  도어 유리: UV y ≈ 436-465 (폭 240, 루프까지 확장)
+  일반 바디: UV x ≈ 30-210 (폭 ~175)
+  유리/상단: UV x ≈ 210-278 (바디 위 영역)
+```
+
+현재 5×3 격자 (열: x=20, 266, 512, 758, 1004):
+→ 앞바퀴(kid x≈217)와 뒷바퀴(kid x≈778) 근처에 제어점 없음
+
+변경: 7×3 격자로 확장, 휠아치 위치에 제어점 추가:
+```json
+{
+  "name": "left_side",
+  "src_points": [
+    [20, 20], [217, 20], [400, 20], [512, 20], [625, 20], [778, 20], [1004, 20],
+    [20, 205], [217, 205], [400, 205], [512, 205], [625, 205], [778, 205], [1004, 205],
+    [20, 390], [217, 390], [400, 390], [512, 390], [625, 390], [778, 390], [1004, 390]
+  ],
+  "dst_points": [
+    [278, 994], [278, 816], [278, 610], [278, 450], [278, 380], [278, 358], [278, 131],
+    [146, 994], [146, 816], [146, 610], [146, 450], [146, 380], [146, 358], [146, 131],
+    [14, 994], [14, 816], [14, 610], [14, 450], [14, 380], [14, 358], [14, 131]
+  ]
+}
+```
+핵심: kid x=217 → UV y=816 (앞 휠아치 중심), kid x=778 → UV y=358 (뒤 휠아치 중심)
+
+---
 
 ## 변경 파일
 
 | 파일 | 변경 |
 |------|------|
-| `backend/app/services/warping.py` | **신규** — piecewise affine 엔진 |
-| `backend/app/templates/model3_warp.json` | **신규** — 제어점 |
-| `backend/app/templates/modely_warp.json` | **신규** — 제어점 |
-| `backend/app/services/compositing.py` | warping 호출 + UV 마스크 합성 |
-| `backend/app/services/panel_map.py` | 삭제 (warping.py로 대체) |
-| `backend/tests/test_warping.py` | **신규** |
-| `backend/tests/test_compositing.py` | 업데이트 |
+| `scripts/generate_templates.py` | 유리 영역 대폭 확대 (사이드 윈도우 추가) |
+| `backend/app/templates/model3_panels.json` | glass_regions 폴리곤 추가 |
+| `backend/app/templates/modely_panels.json` | glass_regions 폴리곤 추가 |
+| `backend/app/services/warping.py` | generate_uv_mask()에 glass 제외 로직 |
+| `backend/app/services/compositing.py` | 유리 틴트 효과 적용 |
+| `frontend/public/templates/` | 재생성된 PDF |
 
-**변경 없음**: detection.py, removal.py, 프론트엔드, 템플릿 PDF, generate_templates.py
+**변경 없음**: detection.py, removal.py, warping 엔진 코어, 프론트엔드 코드
 
 ---
 
 ## Todo
 
-- [ ] `warping.py` — piecewise affine 워핑 엔진 구현
-- [ ] `model3_warp.json` — Model 3 제어점 정의
-- [ ] `modely_warp.json` — Model Y 제어점 정의
-- [ ] `compositing.py` — UV 마스크 합성 로직으로 교체
-- [ ] `panel_map.py` 정리 (warping.py import로 대체)
-- [ ] `test_warping.py` — 워핑 유닛 테스트
-- [ ] `test_compositing.py` — 업데이트
-- [ ] 백엔드 전체 테스트 통과
-- [ ] 커밋 & 푸쉬
+- [ ] generate_templates.py: 사이드뷰 유리 영역 대폭 확대 (필러만 남기고 전부 유리)
+- [ ] generate_templates.py: 사이드뷰 차체 좌우 확장 (범퍼/펜더 끝까지)
+- [ ] generate_templates.py: Model Y도 동일 적용
+- [ ] model3_warp.json: 7×3 격자로 확장 + 휠아치 제어점 추가
+- [ ] modely_warp.json: 동일 적용
+- [ ] model3_panels.json: glass_regions UV 폴리곤 정의
+- [ ] modely_panels.json: glass_regions UV 폴리곤 정의
+- [ ] warping.py: generate_uv_mask()에서 glass_regions 제외
+- [ ] compositing.py: 유리 틴트 효과 추가
+- [ ] 템플릿 PDF 재생성
+- [ ] 테스트 실행 및 통과
+- [ ] 커밋
