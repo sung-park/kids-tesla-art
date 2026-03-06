@@ -1,5 +1,7 @@
 "use client";
 
+import { useT } from "@/contexts/LocaleContext";
+
 export type ProcessingStep =
   | "idle"
   | "uploading"
@@ -10,17 +12,6 @@ export type ProcessingStep =
   | "done"
   | "error";
 
-const STEP_MESSAGES: Record<ProcessingStep, string> = {
-  idle: "",
-  uploading: "Uploading image...",
-  detecting: "Detecting alignment markers...",
-  removing_bg: "Removing background...",
-  compositing: "Applying to Tesla template...",
-  previewing: "Preview ready!",
-  done: "Your wrap is ready!",
-  error: "",
-};
-
 interface ProcessingStatusProps {
   step: ProcessingStep;
   errorMessage?: string;
@@ -30,6 +21,19 @@ export default function ProcessingStatus({
   step,
   errorMessage,
 }: ProcessingStatusProps) {
+  const t = useT();
+
+  const stepMessages: Record<ProcessingStep, string> = {
+    idle: "",
+    uploading: t.status.uploading,
+    detecting: t.status.detecting,
+    removing_bg: t.status.removing_bg,
+    compositing: t.status.compositing,
+    previewing: t.status.previewing,
+    done: t.status.done,
+    error: "",
+  };
+
   if (step === "idle") return null;
 
   const isError = step === "error";
@@ -40,7 +44,7 @@ export default function ProcessingStatus({
     <div
       role="status"
       aria-live="polite"
-      aria-label={isError ? "Error" : STEP_MESSAGES[step]}
+      aria-label={isError ? "Error" : stepMessages[step]}
       className={[
         "flex items-center gap-3 rounded-xl px-4 py-3 text-sm",
         isError
@@ -83,7 +87,7 @@ export default function ProcessingStatus({
         </svg>
       )}
       <span>
-        {isError ? errorMessage || "Something went wrong. Please try again." : STEP_MESSAGES[step]}
+        {isError ? errorMessage || t.status.errorFallback : stepMessages[step]}
       </span>
     </div>
   );

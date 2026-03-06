@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef } from "react";
+import { useT } from "@/contexts/LocaleContext";
 
 interface PreviewModalProps {
   blobUrl: string;
@@ -15,6 +16,7 @@ export default function PreviewModal({
   onConfirm,
   onRedo,
 }: PreviewModalProps) {
+  const t = useT();
   const anchorRef = useRef<HTMLAnchorElement>(null);
 
   const handleDownload = () => {
@@ -28,10 +30,10 @@ export default function PreviewModal({
         {/* Header */}
         <div className="px-6 pt-6 pb-4 border-b border-gray-100 dark:border-gray-800">
           <h2 className="text-lg font-bold text-gray-900 dark:text-white">
-            Your Tesla Wrap Preview
+            {t.preview.title}
           </h2>
           <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-            This is how your wrap will look. Happy with it?
+            {t.preview.subtitle}
           </p>
         </div>
 
@@ -58,7 +60,7 @@ export default function PreviewModal({
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
             </svg>
-            Download Wrap PNG
+            {t.preview.download}
           </button>
 
           <button
@@ -66,7 +68,7 @@ export default function PreviewModal({
             onClick={onRedo}
             className="w-full py-2.5 text-sm font-medium text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors rounded-xl border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800"
           >
-            Try Again
+            {t.preview.tryAgain}
           </button>
         </div>
 
@@ -75,7 +77,7 @@ export default function PreviewModal({
             href="/guide"
             className="text-xs text-gray-400 hover:text-tesla-red transition-colors underline"
           >
-            How to apply it to your Tesla →
+            {t.preview.guideLink}
           </a>
         </div>
       </div>

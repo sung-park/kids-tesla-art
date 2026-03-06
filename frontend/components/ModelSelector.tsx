@@ -1,5 +1,7 @@
 "use client";
 
+import { useT } from "@/contexts/LocaleContext";
+
 export type TeslaModel = "model3" | "modely";
 
 interface ModelSelectorProps {
@@ -7,18 +9,20 @@ interface ModelSelectorProps {
   onChange: (model: TeslaModel) => void;
 }
 
-const MODELS: { id: TeslaModel; label: string; description: string }[] = [
-  { id: "model3", label: "Model 3", description: "Sedan" },
-  { id: "modely", label: "Model Y", description: "SUV / Crossover" },
-];
-
 export default function ModelSelector({
   selected,
   onChange,
 }: ModelSelectorProps) {
+  const t = useT();
+
+  const models: { id: TeslaModel; label: string; description: string }[] = [
+    { id: "model3", label: "Model 3", description: t.modelSelector.sedan },
+    { id: "modely", label: "Model Y", description: t.modelSelector.suv },
+  ];
+
   return (
     <div role="radiogroup" aria-label="Select Tesla model" className="flex gap-3">
-      {MODELS.map((model) => {
+      {models.map((model) => {
         const isSelected = selected === model.id;
         return (
           <button
