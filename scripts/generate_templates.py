@@ -407,7 +407,7 @@ def generate_template_png(model):
         pad = w * 0.02
         _draw_car_side(draw, x0 + pad, y0 + pad * 2,
                        w - pad * 2, h - pad * 4,
-                       model=model, flip=True)
+                       model=model, flip=False)
         for dx in side_dividers:
             for seg_y in range(int(y0 + h * 0.08), int(y0 + h * 0.92), 30):
                 draw.line([(dx, seg_y), (dx, seg_y + 15)],

@@ -1,4 +1,82 @@
-# Plan: 유리 영역 분리 + 바디 전용 맵핑 (2026-03-06)
+# Plan: UV 미러링/클리핑 버그 수정 (2026-03-07)
+
+## 문제 요약
+1. **오른쪽 좌우 반전**: 오른쪽 UV 스트립의 화살표/텍스트가 왼쪽과 반대 방향
+2. **사각형 클리핑**: wheel_exclusions 직사각형이 실제 휠아치와 안 맞아 바디 패널까지 잘림
+3. **오른쪽 영역 좁음**: 오른쪽 warp src y 범위 95px (왼쪽 185px 대비 절반)
+
+## 수정 방식
+
+### Step 1: wheel_exclusions 제거 (Bug 2)
+- `model3_panels.json`, `modely_panels.json`에서 `wheel_exclusions` 배열 삭제
+- UV 템플릿 brightness 마스킹(`gray > 200`)이 이미 휠아치 처리함
+
+### Step 2: 오른쪽 kid template 방향 통일 (Bug 1 + 3)
+아이 템플릿 오른쪽 차를 왼쪽과 같은 방향(앞이 왼쪽)으로 변경:
+
+#### 2a. `*_panels.json` 오른쪽 kid_quad x좌표 반전
+현재 (차가 오른쪽 보는 배치):
+```
+right_front_fender: kid_quad x [758-1004]  (우측)
+right_front_door:   kid_quad x [512-758]
+right_rear_door:    kid_quad x [266-512]
+right_rear_quarter: kid_quad x [20-266]    (좌측)
+```
+변경 후 (차가 왼쪽 보는 배치, 왼쪽과 동일):
+```
+right_front_fender: kid_quad x [20-266]    (좌측 = 차 앞)
+right_front_door:   kid_quad x [266-512]
+right_rear_door:    kid_quad x [512-758]
+right_rear_quarter: kid_quad x [758-1004]  (우측 = 차 뒤)
+```
+
+#### 2b. `*_warp.json` right_side src_points 수정
+현재 (x 역순):
+```json
+"src_points": [
+  [1004, 865], [807, 865], ..., [20, 865],
+  [1004, 935], ..., [20, 935],
+  [1004, 960], ..., [20, 960]
+]
+```
+변경 (x 정순, 왼쪽과 동일 + y 범위 확대):
+```json
+"src_points": [
+  [20, 865], [217, 865], ..., [1004, 865],
+  [20, 928], [217, 928], ..., [1004, 928],
+  [20, 990], [217, 990], ..., [1004, 990]
+]
+```
+
+#### 2c. `generate_templates.py` 오른쪽 flip=False
+```python
+# 변경 전
+_draw_car_side(draw, ..., flip=True)
+# 변경 후
+_draw_car_side(draw, ..., flip=False)
+```
+
+### Step 3: 테스트 업데이트
+- `test_colored_rect.py`로 시각적 검증
+- 기존 backend 테스트 좌표 의존성 확인 및 업데이트
+- `test_warp_local.py`로 전체 파이프라인 검증
+
+### Step 4: 로컬 검증 후 커밋
+
+## Todo
+- [ ] model3_panels.json: wheel_exclusions 제거, 오른쪽 kid_quad 수정
+- [ ] modely_panels.json: wheel_exclusions 제거, 오른쪽 kid_quad 수정
+- [ ] model3_warp.json: right_side src_points x 정순 + y 범위 확대
+- [ ] modely_warp.json: right_side src_points x 정순 + y 범위 확대
+- [ ] generate_templates.py: 오른쪽 flip=False
+- [ ] backend tests 업데이트
+- [ ] test_colored_rect.py로 시각적 검증
+- [ ] test_warp_local.py로 전체 파이프라인 검증
+- [ ] 커밋
+
+---
+
+# (Archive) Plan: 유리 영역 분리 + 바디 전용 맵핑 (2026-03-06)
 
 ## 문제
 1. 아이 템플릿의 유리(창문)가 너무 작음 → 실제 차 비율로 크게 키워야 함 (프레임만 남기고)

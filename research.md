@@ -1,5 +1,52 @@
 # Kids Tesla Art — Research Document
 
+## UV Warp Mirroring & Clipping Issues (2026-03-07)
+
+### Test Method
+Created `scripts/test_colored_rect.py` — fills each panel with a distinct color + right-pointing arrows + "ABC" text, then runs through the full compositing pipeline. Visual comparison of left vs right strip confirms all three bugs.
+
+### Bug 1: Right Side Content Mirroring
+
+**Symptom**: Arrows and text on the right UV strip point in the OPPOSITE direction vs left strip. On the physical car, left and right sides would display mirrored content.
+
+**Root Cause** — two factors:
+1. Kid template right side silhouette drawn with `flip=True` (car faces RIGHT). Front fender at x~1004, rear quarter at x~20.
+2. Warp `right_side` src_points have reversed x: `[1004, 807, ..., 20]` while left is `[20, 217, ..., 1004]`.
+   - Left: kid x increases -> UV y DECREASES (arrows rotate 90 CCW -> point UP)
+   - Right: kid x increases -> UV y INCREASES (arrows rotate 90 CW -> point DOWN)
+   - Result: arrows point OPPOSITE directions on left vs right UV strips.
+
+**Fix**: Change kid template right side to show car facing LEFT (same as left). Update kid_quads, warp src_points, and `generate_templates.py` (set `flip=False` for right side).
+
+### Bug 2: Rectangular Wheel Arch Clipping
+
+**Symptom**: Rectangular strips of colored area get cut away in wrong positions. Shape is rectangular, not following wheel arch curves.
+
+**Root Cause**: `wheel_exclusions` in `*_panels.json` are hard-coded rectangles (e.g. `[[0,700],[150,700],[150,900],[0,900]]`) that extend into valid body panels. Meanwhile, `generate_uv_mask()` already uses brightness threshold (`gray > 200`) — the UV template's dark wheel arches are already masked out. The extra rectangles double-clip into paintable areas.
+
+**Fix**: Remove `wheel_exclusions` entirely. UV template brightness masking is sufficient.
+
+### Bug 3: Right Side Warp Band Too Narrow
+
+**Symptom**: Right side panels are thinner/compressed in UV output.
+
+**Root Cause**:
+- Left warp src y: `[205, 298, 390]` = 185px
+- Right warp src y: `[865, 935, 960]` = 95px (only half the body area)
+- Right side body extends to y~990 but warp stops at y=960.
+
+**Fix**: After fixing Bug 1 (no flip), recalculate right_side src y to `[865, 930, 990]` for proportional coverage.
+
+### Files to Modify
+1. `scripts/generate_templates.py` — right side `flip=False`
+2. `backend/app/templates/model3_panels.json` — reverse right kid_quads, remove wheel_exclusions
+3. `backend/app/templates/modely_panels.json` — same
+4. `backend/app/templates/model3_warp.json` — right_side: same x-direction as left, wider y
+5. `backend/app/templates/modely_warp.json` — same
+6. Backend tests — update coordinate-dependent assertions
+
+---
+
 ## UV Glass/Window Masking Issue (2026-03-06)
 
 ### Problem
