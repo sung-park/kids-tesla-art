@@ -238,6 +238,18 @@ def _load_glass_regions(model: str) -> list[np.ndarray]:
     return regions
 
 
+def _load_wheel_exclusions(model: str) -> list[np.ndarray]:
+    path = TEMPLATES_DIR / f"{model}_panels.json"
+    if not path.exists():
+        return []
+    config = json.loads(path.read_text())
+    regions = []
+    for region in config.get("wheel_exclusions", []):
+        pts = np.array(region["polygon"], dtype=np.int32)
+        regions.append(pts)
+    return regions
+
+
 def generate_uv_mask(uv_template: np.ndarray, model: str = "") -> np.ndarray:
     """Generate a paintable-area mask from the UV template.
 
@@ -259,9 +271,11 @@ def generate_uv_mask(uv_template: np.ndarray, model: str = "") -> np.ndarray:
     kernel = np.ones((3, 3), np.uint8)
     mask = cv2.erode(mask, kernel, iterations=1)
 
-    # Exclude glass/window regions from paintable mask
+    # Exclude glass/window and wheel arch regions from paintable mask
     if model:
         for pts in _load_glass_regions(model):
+            cv2.fillPoly(mask, [pts], 0)
+        for pts in _load_wheel_exclusions(model):
             cv2.fillPoly(mask, [pts], 0)
 
     return mask
