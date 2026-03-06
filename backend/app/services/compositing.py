@@ -52,7 +52,9 @@ def composite_and_optimise(
     )
 
     composited = composite_with_panels(drawing, uv_template, panels)
-    final = Image.fromarray(composited).convert("RGB")
+    rgba_img = Image.fromarray(composited)
+    white_bg = Image.new("RGBA", rgba_img.size, (255, 255, 255, 255))
+    final = Image.alpha_composite(white_bg, rgba_img).convert("RGB")
 
     png_bytes = _compress_to_limit(final)
     safe_name = _sanitise_filename(original_filename)

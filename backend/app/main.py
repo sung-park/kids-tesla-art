@@ -3,13 +3,10 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.routers import process
-from app.services.removal import get_session
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Pre-load rembg session at startup to avoid 30s delay on first request
-    get_session()
     yield
 
 

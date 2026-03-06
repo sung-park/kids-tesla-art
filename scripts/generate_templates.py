@@ -311,11 +311,28 @@ def generate_template_png(model):
                 return px0, py0, px1 - px0, py1 - py0
         return None
 
-    left_r = kid_rect("left_side")
-    right_r = kid_rect("right_side")
+    def kid_rect_group(prefix):
+        rects = [kid_rect(p["name"]) for p in panels if p["name"].startswith(prefix)]
+        rects = [r for r in rects if r]
+        if not rects:
+            return None
+        x0 = min(r[0] for r in rects)
+        y0 = min(r[1] for r in rects)
+        x1 = max(r[0] + r[2] for r in rects)
+        y1 = max(r[1] + r[3] for r in rects)
+        return x0, y0, x1 - x0, y1 - y0
+
+    left_r = kid_rect_group("left_")
+    right_r = kid_rect_group("right_")
     hood_r = kid_rect("hood")
     roof_r = kid_rect("roof")
     trunk_r = kid_rect("trunk")
+
+    # Panel boundary x-positions for divider lines (in page coords)
+    side_dividers = []
+    for kx in [266, 512, 758]:
+        px, _ = _kid_to_page(kx, 0)
+        side_dividers.append(px)
 
     # -----------------------------------------------------------------------
     # Draw section labels above each view
@@ -335,6 +352,10 @@ def generate_template_png(model):
         _draw_car_side(draw, x0 + pad, y0 + pad * 2,
                        w - pad * 2, h - pad * 4,
                        model=model, flip=False, fill=(255, 232, 232))
+        for dx in side_dividers:
+            for seg_y in range(int(y0 + h * 0.08), int(y0 + h * 0.92), 30):
+                draw.line([(dx, seg_y), (dx, seg_y + 15)],
+                          fill=(180, 180, 180), width=3)
         section_header("Left Side", x0, y0, w, (160, 80, 80))
 
     # -----------------------------------------------------------------------
@@ -366,6 +387,10 @@ def generate_template_png(model):
         _draw_car_side(draw, x0 + pad, y0 + pad * 2,
                        w - pad * 2, h - pad * 4,
                        model=model, flip=True, fill=(232, 232, 255))
+        for dx in side_dividers:
+            for seg_y in range(int(y0 + h * 0.08), int(y0 + h * 0.92), 30):
+                draw.line([(dx, seg_y), (dx, seg_y + 15)],
+                          fill=(180, 180, 180), width=3)
         section_header("Right Side", x0, y0, w, (80, 80, 160), y_offset=65)
 
     # -----------------------------------------------------------------------

@@ -88,6 +88,23 @@ class TestCompositeAndOptimise:
         assert filename.endswith(".png")
         assert len(filename) <= 34  # 30 + ".png"
 
+    def test_no_black_background_in_output(self, tmp_path):
+        template_path = tmp_path / "templates"
+        template_path.mkdir()
+        # Template with transparent areas (simulating UV template)
+        template = Image.new("RGBA", (OUTPUT_SIZE, OUTPUT_SIZE), (0, 0, 0, 0))
+        template.save(template_path / "model3.png")
+
+        drawing = make_rgba_array(OUTPUT_SIZE, color=(0, 0, 0, 0))
+
+        with patch("app.services.compositing.TEMPLATES_DIR", template_path):
+            png_bytes, _ = composite_and_optimise(drawing, "model3", "test.jpg")
+
+        img = Image.open(io.BytesIO(png_bytes))
+        pixels = np.array(img)
+        # Transparent areas should be white (255,255,255), not black (0,0,0)
+        assert pixels.mean() > 200
+
     def test_raises_for_unknown_model(self):
         drawing = make_rgba_array()
         with pytest.raises(ValueError, match="No template found"):

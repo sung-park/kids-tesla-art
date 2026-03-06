@@ -1,73 +1,49 @@
-"""Tests for background removal service."""
+"""Tests for threshold-based background removal service."""
 
 import numpy as np
-import pytest
-from unittest.mock import patch, MagicMock
-from PIL import Image
-import io
+
+from app.services.removal import remove_background
 
 
-def make_rgba_array(size: int = 64) -> np.ndarray:
+def make_rgba_array(size: int = 64, color=(200, 150, 100, 255)) -> np.ndarray:
     arr = np.zeros((size, size, 4), dtype=np.uint8)
-    arr[:, :] = (200, 150, 100, 255)
+    arr[:, :] = color
     return arr
-
-
-class TestGetSession:
-    def test_returns_session_singleton(self):
-        from app.services.removal import get_session
-        import app.services.removal as removal_mod
-
-        removal_mod._session = None  # reset
-
-        with patch("app.services.removal.new_session") as mock_new:
-            mock_session = MagicMock()
-            mock_new.return_value = mock_session
-
-            s1 = get_session()
-            s2 = get_session()
-
-        mock_new.assert_called_once_with("u2net")
-        assert s1 is s2
-
-        removal_mod._session = None  # cleanup
 
 
 class TestRemoveBackground:
     def test_returns_rgba_array_of_same_dimensions(self):
         input_arr = make_rgba_array(64)
-
-        mock_result = Image.new("RGBA", (64, 64), (100, 100, 100, 0))
-        buf = io.BytesIO()
-        mock_result.save(buf, format="PNG")
-        mock_png_bytes = buf.getvalue()
-
-        with patch("app.services.removal.get_session") as mock_get, \
-             patch("app.services.removal.remove") as mock_remove:
-            mock_get.return_value = MagicMock()
-            mock_remove.return_value = mock_png_bytes
-
-            from app.services.removal import remove_background
-            result = remove_background(input_arr)
-
+        result = remove_background(input_arr)
         assert result.shape == (64, 64, 4)
         assert result.dtype == np.uint8
 
-    def test_remove_called_with_session(self):
-        input_arr = make_rgba_array(32)
+    def test_white_pixels_become_transparent(self):
+        white_arr = make_rgba_array(32, color=(255, 255, 255, 255))
+        result = remove_background(white_arr)
+        assert result[:, :, 3].max() == 0
 
-        mock_result = Image.new("RGBA", (32, 32), (0, 0, 0, 0))
-        buf = io.BytesIO()
-        mock_result.save(buf, format="PNG")
-        mock_png_bytes = buf.getvalue()
+    def test_colored_pixels_remain_opaque(self):
+        colored_arr = make_rgba_array(32, color=(200, 50, 50, 255))
+        result = remove_background(colored_arr)
+        assert result[:, :, 3].min() > 200
 
-        mock_session = MagicMock()
+    def test_near_white_is_transparent(self):
+        near_white = make_rgba_array(32, color=(240, 238, 235, 255))
+        result = remove_background(near_white)
+        assert result[:, :, 3].max() < 30
 
-        with patch("app.services.removal.get_session", return_value=mock_session), \
-             patch("app.services.removal.remove", return_value=mock_png_bytes) as mock_remove:
-            from app.services.removal import remove_background
-            remove_background(input_arr)
+    def test_preserves_rgb_channels(self):
+        input_arr = make_rgba_array(32, color=(100, 150, 200, 255))
+        result = remove_background(input_arr)
+        np.testing.assert_array_equal(result[:, :, :3], input_arr[:, :, :3])
 
-        mock_remove.assert_called_once()
-        _, kwargs = mock_remove.call_args
-        assert kwargs.get("session") is mock_session
+    def test_mixed_image(self):
+        arr = np.zeros((64, 64, 4), dtype=np.uint8)
+        arr[:32, :, :] = (255, 255, 255, 255)
+        arr[32:, :, :] = (255, 0, 0, 255)
+        result = remove_background(arr)
+        # Interior white region (away from edge) should be transparent
+        assert result[:30, :, 3].max() == 0
+        # Interior red region (away from edge) should be opaque
+        assert result[34:, :, 3].min() > 200
