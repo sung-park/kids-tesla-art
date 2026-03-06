@@ -1,0 +1,18 @@
+services:
+  frontend:
+    image: ${DOCKERHUB_USERNAME}/kids-tesla-art:frontend-latest
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:3002:3000"
+    environment:
+      - NODE_ENV=production
+    depends_on:
+      - backend
+
+  backend:
+    image: ${DOCKERHUB_USERNAME}/kids-tesla-art:backend-latest
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8001:8000"
+    environment:
+      - PYTHONUNBUFFERED=1

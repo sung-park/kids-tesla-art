@@ -1,7 +1,7 @@
-# Product Requirements Document (PRD): Sketch2Wrap
+# Product Requirements Document (PRD): Kids Tesla Art
 
 ## 1. Project Overview
-**Sketch2Wrap** is an open-source web application designed to transform children's hand-drawn, colored templates into custom wrap files for Tesla vehicles. Users can download a printable template, let their kids color it, upload a photo of the finished artwork, and automatically receive a formatted PNG file ready to be applied directly to their Tesla's in-car 3D model.
+**Kids Tesla Art** is an open-source web application designed to transform children's hand-drawn, colored templates into custom wrap files for Tesla vehicles. Users can download a printable template, let their kids color it, upload a photo of the finished artwork, and automatically receive a formatted PNG file ready to be applied directly to their Tesla's in-car 3D model.
 
 ## 2. Target Audience
 - Tesla owners with children who want a personalized, family-friendly in-car experience.

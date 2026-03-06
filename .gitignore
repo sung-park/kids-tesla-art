@@ -1,0 +1,36 @@
+# Dependencies
+node_modules/
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+.env
+
+# Next.js
+.next/
+out/
+
+# Build outputs
+dist/
+build/
+
+# Test coverage
+coverage/
+.coverage
+htmlcov/
+
+# Local dev build artifacts
+frontend/public/templates/*.pdf.local
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editors
+.vscode/
+.idea/
+*.swp
+
+# Docker
+.dockerignore
