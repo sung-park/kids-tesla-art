@@ -69,28 +69,12 @@
   ],
   "glass_regions": [
     {
-      "name": "left_rear_quarter_glass",
-      "polygon": [[200, 147], [230, 147], [230, 370], [200, 370]]
+      "name": "left_side_glass",
+      "polygon": [[200, 147], [230, 147], [230, 992], [200, 992]]
     },
     {
-      "name": "left_rear_door_glass",
-      "polygon": [[200, 380], [230, 380], [230, 580], [200, 580]]
-    },
-    {
-      "name": "left_front_door_glass",
-      "polygon": [[200, 580], [230, 580], [230, 790], [200, 790]]
-    },
-    {
-      "name": "right_rear_quarter_glass",
-      "polygon": [[797, 147], [828, 147], [828, 370], [797, 370]]
-    },
-    {
-      "name": "right_rear_door_glass",
-      "polygon": [[797, 380], [828, 380], [828, 580], [797, 580]]
-    },
-    {
-      "name": "right_front_door_glass",
-      "polygon": [[797, 580], [828, 580], [828, 790], [797, 790]]
+      "name": "right_side_glass",
+      "polygon": [[898, 147], [999, 147], [999, 992], [898, 992]]
     }
   ]
 }
