@@ -2,7 +2,7 @@
 """Generate printable PDF templates with ArUco markers for Kids Tesla Art.
 
 Each template is an A4 page containing:
-  - A simplified Tesla silhouette outline (coloring-book style) in the center
+  - The official Tesla UV template as the coloring area (so coloring maps 1:1 to the wrap)
   - 4 ArUco markers (DICT_4X4_50, IDs 0-3) at the corners
 
 Marker placement convention:
@@ -12,6 +12,8 @@ Marker placement convention:
   - ID 3 → bottom-left
 
 The inner corner of each marker defines the bounding rectangle of the drawing area.
+The UV template is embedded as-is so that pixels colored by the child map directly
+onto the corresponding UV panel on the Tesla wrap.
 
 Usage:
     pip install opencv-contrib-python Pillow reportlab
@@ -20,8 +22,10 @@ Usage:
 Outputs:
     frontend/public/templates/model3-template.pdf
     frontend/public/templates/modely-template.pdf
-    backend/app/templates/model3.png    (UV template placeholders)
-    backend/app/templates/modely.png
+
+Note:
+    backend/app/templates/*.png are NOT regenerated if they already exist.
+    Download official UV templates from https://github.com/teslamotors/custom-wraps
 """
 
 import argparse
@@ -60,41 +64,15 @@ def _generate_aruco_marker_pil(marker_id: int, size_px: int) -> Image.Image:
     return Image.fromarray(cv2.cvtColor(marker_bgr, cv2.COLOR_BGR2RGB))
 
 
-def _draw_tesla_silhouette(draw: ImageDraw.ImageDraw, x: int, y: int, w: int, h: int) -> None:
-    """Draw a simplified Tesla car silhouette outline inside the given bounding box."""
-    # Scale factors
-    sx = w / 200.0
-    sy = h / 100.0
-
-    def s(px, py):
-        return (int(x + px * sx), int(y + py * sy))
-
-    # Car body outline (simplified coupe shape)
-    body = [
-        s(10, 80), s(10, 60), s(30, 35), s(70, 20), s(130, 20),
-        s(170, 35), s(190, 60), s(190, 80),
-    ]
-    draw.polygon(body, outline=(50, 50, 50), fill=(240, 240, 240))
-
-    # Roof
-    roof = [s(40, 60), s(55, 30), s(145, 30), s(160, 60)]
-    draw.polygon(roof, outline=(50, 50, 50), fill=(220, 220, 220))
-
-    # Wheels
-    wheel_color = (80, 80, 80)
-    draw.ellipse([s(30, 72), s(65, 95)], outline=wheel_color, fill=(150, 150, 150), width=2)
-    draw.ellipse([s(135, 72), s(170, 95)], outline=wheel_color, fill=(150, 150, 150), width=2)
-
-    # Window divider line
-    draw.line([s(100, 30), s(100, 60)], fill=(100, 100, 100), width=2)
-
-
 def generate_template_png(
     model: str,
     page_w_px: int = 2480,
     page_h_px: int = 3508,
 ) -> Image.Image:
-    """Generate a full-page template image with ArUco markers and car silhouette.
+    """Generate a full-page template image with ArUco markers and UV template as coloring area.
+
+    The official Tesla UV template is embedded as the coloring sheet so that the
+    child's coloring maps 1:1 onto the final Tesla wrap.
 
     Args:
         model: Tesla model identifier for labeling.
@@ -128,26 +106,37 @@ def generate_template_png(
     draw_w = page_w_px - 2 * (margin + marker_px + 40)
     draw_h = page_h_px - 2 * (margin + marker_px + 40) - 200
 
-    # Dashed border around drawing area
-    draw.rectangle([draw_x, draw_y, draw_x + draw_w, draw_y + draw_h],
-                   outline=(180, 180, 180), width=3)
-
-    # Car silhouette
-    car_margin = 60
-    _draw_tesla_silhouette(
-        draw,
-        draw_x + car_margin,
-        draw_y + car_margin,
-        draw_w - 2 * car_margin,
-        draw_h - 2 * car_margin,
-    )
+    # Embed UV template as the coloring area (1:1 pixel correspondence with the wrap)
+    uv_path = UV_OUTPUT_DIR / f"{model}.png"
+    if uv_path.exists():
+        uv_rgba = Image.open(uv_path).convert("RGBA")
+        # Composite onto white background to preserve transparency as white
+        white_bg = Image.new("RGB", uv_rgba.size, (255, 255, 255))
+        white_bg.paste(uv_rgba, mask=uv_rgba.split()[3])
+        uv_img = white_bg
+        # Fit UV template into drawing area while preserving aspect ratio
+        uv_size = min(draw_w, draw_h)
+        uv_img = uv_img.resize((uv_size, uv_size), Image.LANCZOS)
+        uv_x = draw_x + (draw_w - uv_size) // 2
+        uv_y = draw_y + (draw_h - uv_size) // 2
+        img.paste(uv_img, (uv_x, uv_y))
+    else:
+        # Fallback: plain border if UV template not yet downloaded
+        draw.rectangle([draw_x, draw_y, draw_x + draw_w, draw_y + draw_h],
+                       outline=(180, 180, 180), width=3)
+        draw.text(
+            (page_w_px // 2, draw_y + draw_h // 2),
+            "Download UV template from github.com/teslamotors/custom-wraps",
+            fill=(200, 50, 50),
+            anchor="mm",
+        )
 
     # Labels
     model_label = "Model 3" if model == "model3" else "Model Y"
     instructions = [
         f"Kids Tesla Art — {model_label} Template",
-        "Color inside the outline. Use crayons, markers, or watercolors.",
-        "Then take a photo and upload at kids-tesla-art.example.com",
+        "Color the panels. Use crayons, markers, or watercolors.",
+        "Then take a photo and upload at tesla.sunggeun.com",
         "Keep all 4 corner markers (black squares) fully visible in your photo!",
     ]
 
@@ -238,24 +227,21 @@ def main(args=None):
     for model in opts.models:
         print(f"\nGenerating templates for: {model}")
 
-        print("  Generating printable template PNG...")
+        uv_path = UV_OUTPUT_DIR / f"{model}.png"
+        if not uv_path.exists():
+            print(f"  WARNING: {uv_path} not found.")
+            print(f"  Download the official UV template from https://github.com/teslamotors/custom-wraps")
+            print(f"  The PDF will be generated with a placeholder.")
+        else:
+            print(f"  Using UV template: {uv_path}")
+
+        print("  Generating printable template PDF...")
         template_png = generate_template_png(model)
 
         pdf_path = PDF_OUTPUT_DIR / f"{model}-template.pdf"
         create_pdf(template_png, pdf_path)
 
-        print("  Generating UV template placeholder...")
-        uv_img = generate_uv_template_placeholder(model)
-        uv_path = UV_OUTPUT_DIR / f"{model}.png"
-        uv_img.save(uv_path)
-        print(f"  UV template saved: {uv_path}")
-        print(f"  NOTE: Replace {uv_path} with the official Tesla UV template from")
-        print(f"        https://github.com/teslamotors/custom-wraps")
-
-    print("\nDone! All templates generated.")
-    print("\nIMPORTANT: The UV templates in backend/app/templates/ are placeholders.")
-    print("Download the official templates from https://github.com/teslamotors/custom-wraps")
-    print("and replace the files in backend/app/templates/")
+    print("\nDone! PDF templates generated.")
 
 
 if __name__ == "__main__":
