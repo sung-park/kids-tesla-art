@@ -142,7 +142,7 @@ def _scale_pts(pts, x0, y0, w, h):
 
 
 def _draw_car_side(draw, x0, y0, w, h, model="model3", flip=False,
-                   fill=(255, 235, 235)):
+                   fill=(255, 255, 255)):
     if model == "modely":
         body_pts_n = _MODELY_BODY
         ws_pts_n = _MODELY_WINDSHIELD
@@ -244,14 +244,14 @@ def _draw_car_top(draw, x0, y0, w, h):
         (x0 + w, y0 + h * 0.12), (x0 + w, hood_split),
         (x0, hood_split), (x0, y0 + h * 0.12),
     ]
-    draw.polygon(hood_pts, fill=(225, 248, 225))
+    draw.polygon(hood_pts, fill=(255, 255, 255))
 
     # Roof
     roof_pts = [
         (x0, hood_split), (x0 + w, hood_split),
         (x0 + w, roof_split), (x0, roof_split),
     ]
-    draw.polygon(roof_pts, fill=(225, 235, 255))
+    draw.polygon(roof_pts, fill=(255, 255, 255))
 
     # Trunk
     trunk_pts = [
@@ -260,7 +260,7 @@ def _draw_car_top(draw, x0, y0, w, h):
         (x0 + w - taper, y0 + h), (x0 + taper, y0 + h),
         (x0, y0 + h * 0.88),
     ]
-    draw.polygon(trunk_pts, fill=(255, 248, 220))
+    draw.polygon(trunk_pts, fill=(255, 255, 255))
 
     # Section dividers
     draw.line([(x0, hood_split), (x0 + w, hood_split)], fill=(160, 160, 160), width=5)
@@ -351,7 +351,7 @@ def generate_template_png(model):
         pad = w * 0.02
         _draw_car_side(draw, x0 + pad, y0 + pad * 2,
                        w - pad * 2, h - pad * 4,
-                       model=model, flip=False, fill=(255, 232, 232))
+                       model=model, flip=False)
         for dx in side_dividers:
             for seg_y in range(int(y0 + h * 0.08), int(y0 + h * 0.92), 30):
                 draw.line([(dx, seg_y), (dx, seg_y + 15)],
@@ -386,7 +386,7 @@ def generate_template_png(model):
         pad = w * 0.02
         _draw_car_side(draw, x0 + pad, y0 + pad * 2,
                        w - pad * 2, h - pad * 4,
-                       model=model, flip=True, fill=(232, 232, 255))
+                       model=model, flip=True)
         for dx in side_dividers:
             for seg_y in range(int(y0 + h * 0.08), int(y0 + h * 0.92), 30):
                 draw.line([(dx, seg_y), (dx, seg_y + 15)],
