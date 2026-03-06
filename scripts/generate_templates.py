@@ -177,6 +177,16 @@ def _draw_car_side(draw, x0, y0, w, h, model="model3", flip=False,
     draw.polygon(ws_pts, fill=(210, 230, 248), outline=(100, 120, 140), width=4)
     draw.polygon(rw_pts, fill=(210, 230, 248), outline=(100, 120, 140), width=4)
 
+    # Headlights / taillights — draw before body outline so edge overflow is hidden
+    hl_x = x0 + (0.09 if not flip else 0.91) * w
+    hl_y = y0 + 0.62 * h
+    draw.ellipse([hl_x - 15, hl_y - 9, hl_x + 15, hl_y + 9],
+                 fill=(255, 240, 180), outline=(160, 140, 80), width=3)
+    tl_x = x0 + (0.91 if not flip else 0.09) * w
+    tl_y = y0 + 0.64 * h
+    draw.ellipse([tl_x - 15, tl_y - 9, tl_x + 15, tl_y + 9],
+                 fill=(255, 160, 160), outline=(180, 80, 80), width=3)
+
     # Door line
     door_x = x0 + door_x_n * w
     door_top_y = y0 + 0.12 * h
@@ -184,11 +194,16 @@ def _draw_car_side(draw, x0, y0, w, h, model="model3", flip=False,
     draw.line([(door_x, door_top_y), (door_x, door_bot_y)],
               fill=(160, 160, 160), width=5)
 
-    # Door handles
-    for hx_n in ([0.44, 0.51] if not flip else [0.49, 0.56]):
-        hy = y0 + 0.50 * h
-        draw.line([(x0 + hx_n * w, hy), (x0 + (hx_n + 0.05) * w, hy)],
-                  fill=(140, 140, 140), width=6)
+    # Door handles — small rectangles well away from door line
+    handle_positions = [(0.34, 0.43), (0.67, 0.43)]
+    if flip:
+        handle_positions = [(1.0 - hx, hy) for hx, hy in handle_positions]
+    for hx_n, hy_n in handle_positions:
+        hx = x0 + hx_n * w
+        hy = y0 + hy_n * h
+        hw, hh = w * 0.06, h * 0.025
+        draw.rectangle([hx - hw / 2, hy - hh / 2, hx + hw / 2, hy + hh / 2],
+                       fill=(180, 180, 180), outline=(100, 100, 100), width=2)
 
     # Body outline
     for i in range(len(body_pts)):
@@ -206,16 +221,6 @@ def _draw_car_side(draw, x0, y0, w, h, model="model3", flip=False,
         inner = cr * 0.55
         draw.ellipse([cx - inner, cy - inner, cx + inner, cy + inner],
                      fill=(200, 200, 200), outline=(120, 120, 120), width=3)
-
-    # Headlight / taillight hint
-    hl_x = x0 + (0.06 if not flip else 0.94) * w
-    hl_y = y0 + 0.58 * h
-    draw.ellipse([hl_x - 18, hl_y - 10, hl_x + 18, hl_y + 10],
-                 fill=(255, 240, 180), outline=(160, 140, 80), width=3)
-    tl_x = x0 + (0.94 if not flip else 0.06) * w
-    tl_y = y0 + 0.60 * h
-    draw.ellipse([tl_x - 18, tl_y - 10, tl_x + 18, tl_y + 10],
-                 fill=(255, 160, 160), outline=(180, 80, 80), width=3)
 
 
 def _draw_car_top(draw, x0, y0, w, h):
@@ -318,8 +323,8 @@ def generate_template_png(model):
     label_font = _load_font(52)
     small_font = _load_font(40)
 
-    def section_header(text, x0, y0, w, color=(80, 80, 80)):
-        draw.text((x0 + w / 2, y0 - 55), text, fill=color, anchor="mm", font=label_font)
+    def section_header(text, x0, y0, w, color=(80, 80, 80), y_offset=-55):
+        draw.text((x0 + w / 2, y0 + y_offset), text, fill=color, anchor="mm", font=label_font)
 
     # -----------------------------------------------------------------------
     # LEFT SIDE VIEW
@@ -330,7 +335,7 @@ def generate_template_png(model):
         _draw_car_side(draw, x0 + pad, y0 + pad * 2,
                        w - pad * 2, h - pad * 4,
                        model=model, flip=False, fill=(255, 232, 232))
-        section_header("← Left Side  (왼쪽)", x0, y0, w, (160, 80, 80))
+        section_header("Left Side", x0, y0, w, (160, 80, 80))
 
     # -----------------------------------------------------------------------
     # TOP VIEW (hood + roof + trunk stacked)
@@ -350,7 +355,7 @@ def generate_template_png(model):
             draw.text((rx + rw / 2, ry + rh / 2), name,
                       fill=(90, 90, 90), anchor="mm", font=label_font)
 
-        section_header("Top View  (위에서)", top_x0, top_y0, top_w, (80, 100, 160))
+        section_header("Top View", top_x0, top_y0, top_w, (80, 100, 160))
 
     # -----------------------------------------------------------------------
     # RIGHT SIDE VIEW (flipped)
@@ -361,7 +366,7 @@ def generate_template_png(model):
         _draw_car_side(draw, x0 + pad, y0 + pad * 2,
                        w - pad * 2, h - pad * 4,
                        model=model, flip=True, fill=(232, 232, 255))
-        section_header("Right Side  (오른쪽) →", x0, y0, w, (80, 80, 160))
+        section_header("Right Side", x0, y0, w, (80, 80, 160), y_offset=65)
 
     # -----------------------------------------------------------------------
     # ArUco markers
