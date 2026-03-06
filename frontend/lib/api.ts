@@ -73,7 +73,7 @@ export async function processImage(
   const filename = filenameMatch?.[1] ?? "kids-tesla-wrap.png";
 
   const blobUrl = URL.createObjectURL(blob);
-  onStep("done");
+  onStep("previewing");
 
   return { blobUrl, filename };
 }

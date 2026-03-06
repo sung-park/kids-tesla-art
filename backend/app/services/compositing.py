@@ -4,8 +4,11 @@ import io
 import re
 from pathlib import Path
 
+import cv2
 import numpy as np
 from PIL import Image
+
+from app.services.panel_map import load_panels, composite_with_panels
 
 TEMPLATES_DIR = Path(__file__).parent.parent / "templates"
 OUTPUT_SIZE = 1024
@@ -13,26 +16,14 @@ MAX_FILE_SIZE = 1024 * 1024  # 1MB in bytes
 FILENAME_MAX_LEN = 30
 
 
-def _load_template(model: str) -> Image.Image:
-    """Load the Tesla UV template PNG for the given model id.
-
-    Args:
-        model: One of 'model3' or 'modely'.
-
-    Returns:
-        PIL Image in RGBA mode, resized to OUTPUT_SIZE x OUTPUT_SIZE.
-
-    Raises:
-        ValueError: If the model is unsupported or the template file is missing.
-    """
+def _load_template_np(model: str) -> np.ndarray:
     path = TEMPLATES_DIR / f"{model}.png"
     if not path.exists():
         raise ValueError(f"No template found for model '{model}'. Expected: {path}")
-
-    template = Image.open(path).convert("RGBA").resize(
+    img = Image.open(path).convert("RGBA").resize(
         (OUTPUT_SIZE, OUTPUT_SIZE), Image.LANCZOS
     )
-    return template
+    return np.array(img)
 
 
 def composite_and_optimise(
@@ -40,28 +31,28 @@ def composite_and_optimise(
     model: str,
     original_filename: str = "drawing",
 ) -> tuple[bytes, str]:
-    """Composite the drawing onto the Tesla template and return an optimised PNG.
+    """Composite the kid's drawing onto the Tesla UV template using per-panel mapping.
 
     Args:
         drawing_rgba: Background-removed drawing as RGBA numpy array (H x W x 4).
+                      This is warped from the kid-friendly template space.
         model: Tesla model id ('model3' or 'modely').
         original_filename: Original filename hint for output naming.
 
     Returns:
         Tuple of (png_bytes, safe_filename).  png_bytes is guaranteed ≤ 1MB.
     """
-    template = _load_template(model)
+    uv_template = _load_template_np(model)
+    panels = load_panels(model)
 
-    drawing = Image.fromarray(drawing_rgba, mode="RGBA").resize(
-        (OUTPUT_SIZE, OUTPUT_SIZE), Image.LANCZOS
+    drawing = np.array(
+        Image.fromarray(drawing_rgba, mode="RGBA").resize(
+            (OUTPUT_SIZE, OUTPUT_SIZE), Image.LANCZOS
+        )
     )
 
-    # Composite: paste drawing over template using drawing's alpha as mask
-    result = template.copy()
-    result.paste(drawing, (0, 0), mask=drawing)
-
-    # Convert to RGB for final PNG (Tesla does not use alpha)
-    final = result.convert("RGB")
+    composited = composite_with_panels(drawing, uv_template, panels)
+    final = Image.fromarray(composited).convert("RGB")
 
     png_bytes = _compress_to_limit(final)
     safe_name = _sanitise_filename(original_filename)

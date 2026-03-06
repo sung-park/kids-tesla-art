@@ -6,6 +6,7 @@ export type ProcessingStep =
   | "detecting"
   | "removing_bg"
   | "compositing"
+  | "previewing"
   | "done"
   | "error";
 
@@ -15,6 +16,7 @@ const STEP_MESSAGES: Record<ProcessingStep, string> = {
   detecting: "Detecting alignment markers...",
   removing_bg: "Removing background...",
   compositing: "Applying to Tesla template...",
+  previewing: "Preview ready!",
   done: "Your wrap is ready!",
   error: "",
 };

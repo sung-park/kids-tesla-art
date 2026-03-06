@@ -7,6 +7,7 @@ import ProcessingStatus, {
   type ProcessingStep,
 } from "@/components/ProcessingStatus";
 import DownloadButton from "@/components/DownloadButton";
+import PreviewModal from "@/components/PreviewModal";
 import { processImage, ProcessingError } from "@/lib/api";
 
 interface ResultState {
@@ -49,9 +50,22 @@ export default function HomePage() {
   };
 
   const isProcessing =
-    step !== "idle" && step !== "done" && step !== "error";
+    step !== "idle" && step !== "done" && step !== "error" && step !== "previewing";
+
+  const handleConfirmDownload = () => {
+    setStep("done");
+  };
 
   return (
+    <>
+    {step === "previewing" && result && (
+      <PreviewModal
+        blobUrl={result.blobUrl}
+        filename={result.filename}
+        onConfirm={handleConfirmDownload}
+        onRedo={handleReset}
+      />
+    )}
     <div className="max-w-2xl mx-auto px-4 py-12">
       {/* Hero */}
       <div className="text-center mb-10">
@@ -165,5 +179,6 @@ export default function HomePage() {
         </ul>
       </div>
     </div>
+    </>
   );
 }
