@@ -345,9 +345,9 @@ TRACKBARS = [
     ("Hood y_end",   300,  875, "hood_y_end"),
     ("Hood y_off",  -160,  160, "hood_y_off"),
     # --- Roof ---
-    ("Roof y_start", 300,  800, "roof_y_start"),
-    ("Roof y_end",   400,  900, "roof_y_end"),
-    ("Roof y_off",  -160,  160, "roof_y_off"),
+    ("Bumper y_start", 300,  800, "roof_y_start"),
+    ("Bumper y_end",   400,  900, "roof_y_end"),
+    ("Bumper y_off",  -160,  160, "roof_y_off"),
     # --- Trunk ---
     ("Trunk y_start", 400,  900, "trunk_y_start"),
     ("Trunk y_end",   500, 1023, "trunk_y_end"),
@@ -372,12 +372,37 @@ def run(model, input_path=None):
     )
 
     if input_path:
-        raw = np.array(
-            Image.open(input_path).convert("RGBA")
-              .resize((OUTPUT_SIZE, OUTPUT_SIZE), Image.LANCZOS)
-        )
+        raw_bgr = cv2.imread(input_path)
+        if raw_bgr is None:
+            raw_bgr = cv2.cvtColor(
+                np.array(Image.open(input_path).convert("RGB")), cv2.COLOR_RGB2BGR
+            )
+        # Try ArUco perspective correction (same as production pipeline)
+        aruco_dict = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_4X4_50)
+        detector = cv2.aruco.ArucoDetector(aruco_dict, cv2.aruco.DetectorParameters())
+        gray = cv2.cvtColor(raw_bgr, cv2.COLOR_BGR2GRAY)
+        clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
+        corners, ids, _ = detector.detectMarkers(clahe.apply(gray))
+        MARKER_INNER = {0: 2, 1: 3, 2: 0, 3: 1}
+        if ids is not None and len(ids) >= 4:
+            id_to_c = {int(mid): c[0] for c, mid in zip(corners, ids.flatten())
+                       if int(mid) in MARKER_INNER}
+            if all(k in id_to_c for k in range(4)):
+                src_pts = np.float32([id_to_c[k][MARKER_INNER[k]] for k in range(4)])
+                dst_pts = np.float32([[0,0],[OUTPUT_SIZE-1,0],[OUTPUT_SIZE-1,OUTPUT_SIZE-1],[0,OUTPUT_SIZE-1]])
+                M = cv2.getPerspectiveTransform(src_pts, dst_pts)
+                corrected = cv2.warpPerspective(raw_bgr, M, (OUTPUT_SIZE, OUTPUT_SIZE))
+                raw = cv2.cvtColor(corrected, cv2.COLOR_BGR2RGBA)
+                print(f"Input: {input_path}  (ArUco perspective correction applied)")
+            else:
+                raw = np.array(Image.open(input_path).convert("RGBA")
+                               .resize((OUTPUT_SIZE, OUTPUT_SIZE), Image.LANCZOS))
+                print(f"Input: {input_path}  (ArUco not found, using resize fallback)")
+        else:
+            raw = np.array(Image.open(input_path).convert("RGBA")
+                           .resize((OUTPUT_SIZE, OUTPUT_SIZE), Image.LANCZOS))
+            print(f"Input: {input_path}  (ArUco not found, using resize fallback)")
         kid_img = remove_bg(raw)
-        print(f"Input: {input_path}  (background removal applied)")
     else:
         kid_img = make_colored_kid_image(panels_config)
         print("Using synthetic colored template (pass --input for real scan)")
@@ -402,7 +427,7 @@ def run(model, input_path=None):
             f"R  y:{params['right_y_start']}-{params['right_y_end']}  span:{params['right_x_span']}  off:{params['right_x_off']}",
             f"Top x:{params['top_x_start']}-{params['top_x_end']}  off:{params['top_x_off']}",
             f"Hood y:{params['hood_y_start']}-{params['hood_y_end']}  off:{params['hood_y_off']}",
-            f"Roof y:{params['roof_y_start']}-{params['roof_y_end']}  off:{params['roof_y_off']}",
+            f"Bumper y:{params['roof_y_start']}-{params['roof_y_end']}  off:{params['roof_y_off']}",
             f"Trunk y:{params['trunk_y_start']}-{params['trunk_y_end']}  off:{params['trunk_y_off']}",
         ]
         font, scale, thick = cv2.FONT_HERSHEY_SIMPLEX, 0.45, 1

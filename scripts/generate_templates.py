@@ -392,7 +392,7 @@ def generate_template_png(model):
                       top_w - pad * 2, top_h)
 
         # Section labels
-        for name, rect in [("Hood", hood_r), ("Roof", roof_r), ("Trunk", trunk_r)]:
+        for name, rect in [("Hood", hood_r), ("Front Bumper", roof_r), ("Trunk", trunk_r)]:
             rx, ry, rw, rh = rect
             draw.text((rx + rw / 2, ry + rh / 2), name,
                       fill=(90, 90, 90), anchor="mm", font=label_font)
