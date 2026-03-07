@@ -68,37 +68,24 @@ export default function ImageUploader({
         onClick={() => !disabled && fileInputRef.current?.click()}
         onKeyDown={(e) => { if ((e.key === "Enter" || e.key === " ") && !disabled) fileInputRef.current?.click(); }}
         className={[
-          "relative border-2 border-dashed rounded-xl p-10 text-center cursor-pointer transition-colors select-none",
+          "relative border-4 border-dashed rounded-3xl p-10 text-center cursor-pointer select-none transition-transform duration-150",
           isDragging
-            ? "border-tesla-red bg-red-50 dark:bg-red-950"
-            : "border-gray-300 dark:border-gray-600 hover:border-gray-400 dark:hover:border-gray-500",
+            ? "border-crayon-pink bg-pastel-pink -rotate-1"
+            : "border-ink/30 hover:border-crayon-yellow hover:-rotate-1",
           disabled ? "opacity-50 cursor-not-allowed" : "",
         ].join(" ")}
       >
         <div className="flex flex-col items-center gap-3">
-          <svg
-            className="w-10 h-10 text-gray-400"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-            aria-hidden="true"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={1.5}
-              d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5"
-            />
-          </svg>
+          <span className="text-5xl">🎨</span>
           <div>
-            <p className="font-medium text-gray-700 dark:text-gray-300">
+            <p className="font-bold text-ink text-base">
               {t.uploader.dropHere}
             </p>
-            <p className="text-sm text-gray-500 mt-1">
+            <p className="text-sm text-ink/60 mt-1">
               {t.uploader.clickToBrowse}
             </p>
           </div>
-          <p className="text-xs text-gray-400">{t.uploader.fileTypes}</p>
+          <p className="text-xs text-ink/40">{t.uploader.fileTypes}</p>
         </div>
       </div>
 
@@ -126,17 +113,14 @@ export default function ImageUploader({
         type="button"
         disabled={disabled}
         onClick={() => !disabled && cameraInputRef.current?.click()}
-        className="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-xl border border-gray-300 dark:border-gray-600 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed md:hidden"
+        className="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-2xl border-2 border-ink bg-pastel-sky text-ink text-sm font-bold shadow-[3px_3px_0px_#1A1A1A] hover:-rotate-1 transition-transform duration-150 disabled:opacity-50 disabled:cursor-not-allowed md:hidden"
       >
-        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z" />
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0zM18.75 10.5h.008v.008h-.008V10.5z" />
-        </svg>
+        <span className="text-lg">📸</span>
         {t.uploader.takePhoto}
       </button>
 
       {error && (
-        <p role="alert" className="text-sm text-red-600 dark:text-red-400 text-center">
+        <p role="alert" className="text-sm font-bold text-tesla-red text-center">
           {error}
         </p>
       )}

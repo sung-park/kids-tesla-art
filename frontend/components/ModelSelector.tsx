@@ -15,9 +15,9 @@ export default function ModelSelector({
 }: ModelSelectorProps) {
   const t = useT();
 
-  const models: { id: TeslaModel; label: string; description: string }[] = [
-    { id: "model3", label: "Model 3", description: t.modelSelector.sedan },
-    { id: "modely", label: "Model Y", description: t.modelSelector.suv },
+  const models: { id: TeslaModel; label: string; description: string; emoji: string; pastel: string }[] = [
+    { id: "model3", label: "Model 3", description: t.modelSelector.sedan, emoji: "🚗", pastel: "bg-pastel-sky" },
+    { id: "modely", label: "Model Y", description: t.modelSelector.suv, emoji: "🚙", pastel: "bg-pastel-pink" },
   ];
 
   return (
@@ -32,23 +32,15 @@ export default function ModelSelector({
             aria-checked={isSelected}
             onClick={() => onChange(model.id)}
             className={[
-              "flex-1 rounded-xl border-2 px-4 py-3 text-left transition-all",
+              "flex-1 rounded-2xl border-2 border-ink px-4 py-3 text-left transition-transform duration-150 hover:-rotate-1",
               isSelected
-                ? "border-tesla-red bg-red-50 dark:bg-red-950"
-                : "border-gray-200 dark:border-gray-700 hover:border-gray-400",
+                ? `${model.pastel} shadow-[4px_4px_0px_#1A1A1A]`
+                : "bg-white hover:bg-ivory shadow-[2px_2px_0px_#1A1A1A]",
             ].join(" ")}
           >
-            <p
-              className={[
-                "font-semibold text-sm",
-                isSelected
-                  ? "text-tesla-red"
-                  : "text-tesla-dark dark:text-white",
-              ].join(" ")}
-            >
-              {model.label}
-            </p>
-            <p className="text-xs text-gray-500 mt-0.5">{model.description}</p>
+            <p className="text-xl mb-1">{model.emoji}</p>
+            <p className="font-bold text-sm text-ink">{model.label}</p>
+            <p className="text-xs text-ink/60 mt-0.5">{model.description}</p>
           </button>
         );
       })}

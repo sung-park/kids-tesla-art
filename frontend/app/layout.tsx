@@ -1,8 +1,11 @@
 import type { Metadata } from "next";
+import { Jua } from "next/font/google";
 import "./globals.css";
 import { LocaleProvider } from "@/contexts/LocaleContext";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
+
+const jua = Jua({ weight: "400", subsets: ["latin"], variable: "--font-jua" });
 
 export const metadata: Metadata = {
   title: "Kids Tesla Art",
@@ -23,7 +26,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="ko" suppressHydrationWarning>
-      <body className="min-h-screen bg-white dark:bg-tesla-dark antialiased">
+      <body className={`${jua.variable} min-h-screen bg-ivory antialiased`}>
         <LocaleProvider>
           <Header />
           <main>{children}</main>

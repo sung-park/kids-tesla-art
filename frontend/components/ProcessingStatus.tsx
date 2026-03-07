@@ -46,12 +46,12 @@ export default function ProcessingStatus({
       aria-live="polite"
       aria-label={isError ? "Error" : stepMessages[step]}
       className={[
-        "flex items-center gap-3 rounded-xl px-4 py-3 text-sm",
+        "flex items-center gap-3 rounded-2xl border-2 border-ink px-4 py-3 text-sm font-bold shadow-[3px_3px_0px_#1A1A1A]",
         isError
-          ? "bg-red-50 dark:bg-red-950 text-red-700 dark:text-red-400"
+          ? "bg-pastel-pink text-ink"
           : isDone
-          ? "bg-green-50 dark:bg-green-950 text-green-700 dark:text-green-400"
-          : "bg-blue-50 dark:bg-blue-950 text-blue-700 dark:text-blue-400",
+          ? "bg-pastel-mint text-ink"
+          : "bg-pastel-sky text-ink",
       ].join(" ")}
     >
       {isProcessing && (
