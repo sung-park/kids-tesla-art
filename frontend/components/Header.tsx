@@ -10,27 +10,28 @@ export default function Header() {
 
   return (
     <header className="border-b-4 border-ink bg-ivory">
-      <div className="max-w-4xl mx-auto px-4 py-4 flex items-center justify-between">
-        <Link href="/" className="flex items-center gap-1.5 hover:-rotate-1 transition-transform duration-150">
-          <span className="text-2xl font-bold text-crayon-pink">Kids</span>
-          <span className="text-2xl font-bold text-ink">Tesla Art</span>
-          <span className="text-xl">🎨</span>
+      <div className="max-w-4xl mx-auto px-4 py-3 flex items-center justify-between">
+        <Link href="/" className="flex items-center gap-1 hover:-rotate-1 transition-transform duration-150">
+          <span className="text-lg sm:text-2xl font-bold text-crayon-pink">Kids</span>
+          <span className="text-lg sm:text-2xl font-bold text-ink">Tesla Art</span>
+          <span className="text-base sm:text-xl">🎨</span>
         </Link>
-        <nav className="flex items-center gap-4 text-sm font-bold text-ink">
+        <nav className="flex items-center gap-2 sm:gap-4 text-sm font-bold text-ink">
           <Link href="/" className="hover:text-crayon-pink transition-colors">
             {t.nav.create}
           </Link>
           <Link
             href="/guide"
-            className="hover:text-crayon-sky transition-colors"
+            className="hover:text-crayon-sky transition-colors whitespace-nowrap"
           >
-            {t.nav.howToApply}
+            <span className="hidden sm:inline">{t.nav.howToApply}</span>
+            <span className="sm:hidden">Guide</span>
           </Link>
           <a
             href="https://github.com/sung-park/kids-tesla-art"
             target="_blank"
             rel="noopener noreferrer"
-            className="hover:text-crayon-mint transition-colors"
+            className="hidden sm:block hover:text-crayon-mint transition-colors"
           >
             GitHub
           </a>
