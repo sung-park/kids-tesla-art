@@ -20,6 +20,10 @@ coverage/
 .coverage
 htmlcov/
 
+# AI workflow working documents (ephemeral)
+plan.md
+research.md
+
 # Local dev build artifacts
 frontend/public/templates/*.pdf.local
 
