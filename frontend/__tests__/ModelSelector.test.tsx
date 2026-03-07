@@ -8,7 +8,7 @@ describe("ModelSelector", () => {
   it("renders both model options", () => {
     renderEn(<ModelSelector selected="model3" onChange={vi.fn()} />);
     expect(screen.getByText("Model 3")).toBeInTheDocument();
-    expect(screen.getByText("Model Y")).toBeInTheDocument();
+    expect(screen.getByText("Model Y (~2024)")).toBeInTheDocument();
   });
 
   it("marks selected model as checked", () => {
