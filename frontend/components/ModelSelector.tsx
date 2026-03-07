@@ -17,7 +17,7 @@ export default function ModelSelector({
 
   const models: { id: TeslaModel; label: string; description: string; emoji: string; pastel: string }[] = [
     { id: "model3", label: "Model 3", description: t.modelSelector.sedan, emoji: "🚗", pastel: "bg-pastel-sky" },
-    { id: "modely", label: "Model Y", description: t.modelSelector.suv, emoji: "🚙", pastel: "bg-pastel-pink" },
+    { id: "modely", label: "Model Y (~2024)", description: t.modelSelector.suv, emoji: "🚙", pastel: "bg-pastel-pink" },
   ];
 
   return (

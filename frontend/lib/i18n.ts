@@ -30,6 +30,10 @@ const translations = {
         "Avoid shadows or reflections over the markers",
         "Take the photo straight on, not at an angle",
       ],
+      sampleAlt1: "Kid's colored template",
+      sampleAlt2: "Applied to a real Tesla",
+      sampleCaption1: "Kid colors the template",
+      sampleCaption2: "Result on actual Tesla",
       unexpectedError: "Unexpected error. Please try again.",
     },
     guide: {
@@ -140,6 +144,10 @@ const translations = {
         "마커 위에 그림자나 반사광이 없도록 하세요",
         "기울이지 말고 정면에서 찍어주세요",
       ],
+      sampleAlt1: "아이가 색칠한 템플릿",
+      sampleAlt2: "실제 테슬라에 적용된 모습",
+      sampleCaption1: "아이가 색칠한 템플릿",
+      sampleCaption2: "실제 테슬라에 적용된 모습",
       unexpectedError: "예기치 못한 오류가 발생했습니다. 다시 시도해 주세요.",
     },
     guide: {

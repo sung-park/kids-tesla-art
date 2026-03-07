@@ -18,7 +18,7 @@ interface ResultState {
 
 export default function HomePage() {
   const t = useT();
-  const [model, setModel] = useState<TeslaModel>("model3");
+  const [model, setModel] = useState<TeslaModel>("modely");
   const [step, setStep] = useState<ProcessingStep>("idle");
   const [errorMessage, setErrorMessage] = useState<string | undefined>();
   const [result, setResult] = useState<ResultState | null>(null);
@@ -77,6 +77,19 @@ export default function HomePage() {
         <p className="text-ink/70 text-lg">
           {t.home.heroSubtitle}
         </p>
+      </div>
+
+      {/* Sample showcase */}
+      <div className="flex gap-3 mb-10">
+        {[
+          { src: "/samples/kids_template.jpeg", alt: t.home.sampleAlt1, caption: t.home.sampleCaption1 },
+          { src: "/samples/tesla_model_y.jpeg", alt: t.home.sampleAlt2, caption: t.home.sampleCaption2 },
+        ].map(({ src, alt, caption }) => (
+          <div key={src} className="flex-1 rounded-2xl border-2 border-ink overflow-hidden shadow-[4px_4px_0px_#1A1A1A]">
+            <img src={src} alt={alt} className="w-full h-40 object-cover" />
+            <p className="text-xs font-bold text-ink text-center py-2 bg-pastel-yellow">{caption}</p>
+          </div>
+        ))}
       </div>
 
       {/* Steps indicator */}
